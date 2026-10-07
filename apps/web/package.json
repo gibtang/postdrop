@@ -1,0 +1,6 @@
+{
+  "name": "@postdrop/web",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Postdrop web app: /v1 API, Dashboard, Link pages"
+}

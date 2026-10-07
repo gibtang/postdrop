@@ -1,0 +1,6 @@
+{
+  "name": "@postdrop/sdk",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Postdrop API client shared by CLI and MCP server"
+}

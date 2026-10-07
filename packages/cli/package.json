@@ -1,0 +1,9 @@
+{
+  "name": "postdrop",
+  "version": "0.0.0",
+  "private": true,
+  "description": "One-line file handoff CLI for agents",
+  "bin": {
+    "postdrop": "./dist/cli.js"
+  }
+}

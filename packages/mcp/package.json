@@ -1,0 +1,9 @@
+{
+  "name": "postdrop-mcp",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Postdrop MCP server (stdio) for agent file handoffs",
+  "bin": {
+    "postdrop-mcp": "./dist/mcp.js"
+  }
+}
