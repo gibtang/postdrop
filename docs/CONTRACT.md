@@ -17,7 +17,7 @@ Node 20, Next.js 15 App Router (apps/web), pnpm workspaces. All server code ESM-
 
 - `AUTH_MODE`: `password` (v1) | `firebase` (reserved — module seam only, do not implement)
 - `STORAGE_DRIVER`: `disk` (default) | `s3` (S3-compatible: R2 or B2 via endpoint)
-- `BASE_URL`: public origin, e.g. `https://postdrop.feedcode.dev`
+- `BASE_URL`: public origin — **`https://thepostdrop.dev`**
 - `MONGODB_URI`, `SESSION_SECRET`, `RESEND_API_KEY`, `RESEND_FROM`
 - `DISK_STORAGE_PATH` (disk driver); `S3_ENDPOINT`, `S3_REGION`, `S3_BUCKET`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` (s3 driver, forcePathStyle=true)
 
@@ -50,7 +50,7 @@ Node 20, Next.js 15 App Router (apps/web), pnpm workspaces. All server code ESM-
 
 ## API — owner /api (session cookie)
 
-`POST /api/auth/login`, `POST /api/auth/logout`, `GET /api/auth/me`, `GET /api/agents`, `POST /api/agents {name}` → returns **plaintext key once**, `DELETE /api/agents/:id`, `GET /api/drops` (all account agents, summary list), `DELETE /api/drops/:id` (purge now), `GET /api/usage` → `{tier:"free", storageBytes, capBytes:104857600}`.
+`POST /api/auth/login`, `POST /api/auth/logout`, `GET /api/auth/me`, `GET /api/agents`, `POST /api/agents {name}` → returns **plaintext key once**, `DELETE /api/agents/:id`, `GET /api/drops` (all account agents, summary list), `DELETE /api/drops/:id` (purge now), `GET /api/drops/:id/file` → original download stream (owner, scope-checked via accountId), `GET /api/usage` → `{tier:"free", storageBytes, capBytes:104857600}`.
 
 ## API — public link /l/:token
 
@@ -69,7 +69,7 @@ lib/sweeper.ts: setInterval 5 min (skip in test env via `SWEEPER_DISABLED`) — 
 ## Clients (packages)
 
 - **sdk** (`@postdrop/sdk`, tsc→dist): `PostdropClient({baseUrl, apiKey})`: `send(file: string|Buffer|ReadableStream, {recipientEmail, ttlHours?, filename?})`, `get(id)`, `result(id)`, `downloadEdit(id, destPath?)`, `revoke(id)`, `list(opts?)`. Streams via native fetch + FormData-free raw body.
-- **cli** (`postdrop-cli`, bin `postdrop`, commander): `postdrop drop <file> --to <email> [--ttl 168]` prints linkUrl; `postdrop check <dropId>` prints status + reply/edit; `postdrop edit-download <dropId> [dest]`. Env `POSTDROP_API_KEY`, `POSTDROP_BASE_URL` (default https://postdrop.feedcode.dev).
+- **cli** (`postdrop-cli`, bin `postdrop`, commander): `postdrop drop <file> --to <email> [--ttl 168]` prints linkUrl; `postdrop check <dropId>` prints status + reply/edit; `postdrop edit-download <dropId> [dest]`. Env `POSTDROP_API_KEY`, `POSTDROP_BASE_URL` (default https://thepostdrop.dev).
 - **mcp** (`postdrop-mcp`, @modelcontextprotocol/sdk stdio server): tools `postdrop_send {file_path, recipient_email, ttl_hours?}`, `postdrop_check {drop_id}` (returns status, replyText, edit presence). Same envs. Minimal MCP version handshake per SDK defaults.
 
 ## UI direction (ui agent)

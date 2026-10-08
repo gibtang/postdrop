@@ -4,13 +4,16 @@
   "private": true,
   "type": "module",
   "description": "Postdrop MCP server (stdio) for agent file handoffs",
-  "bin": { "postdrop-mcp": "./dist/mcp.js" },
+  "bin": {
+    "postdrop-mcp": "./dist/mcp.js"
+  },
   "scripts": {
     "build": "tsc -p tsconfig.json"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0",
-    "@postdrop/sdk": "workspace:^"
+    "@postdrop/sdk": "workspace:^",
+    "zod": "^3.24.0"
   },
   "devDependencies": {
     "@types/node": "^20.17.0",
