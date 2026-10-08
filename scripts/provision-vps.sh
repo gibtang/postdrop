@@ -38,7 +38,7 @@ if [ -n "${OLD_UUID:-}" ]; then
 fi
 
 echo "== create dockerfile app"
-PAYLOAD=$(DOCKERFILE_B64=$(printf '%s' 'FROM postdrop-web:local' | base64) node -e "
+PAYLOAD=$(DOCKERFILE_B64=$(printf '%s' 'FROM localhost:5000/postdrop-web:local' | base64) node -e "
 const p={project_uuid:process.argv[1],environment_name:'production',server_uuid:process.argv[2],destination_uuid:process.argv[3],dockerfile:process.env.DOCKERFILE_B64,name:'postdrop',description:'Standalone agent-to-human file drop'};
 process.stdout.write(JSON.stringify(p));
 " "$PROJ" "$SRV" "$DEST")
