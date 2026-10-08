@@ -1,9 +1,19 @@
 {
-  "name": "postdrop",
-  "version": "0.0.0",
+  "name": "postdrop-cli",
+  "version": "0.1.0",
   "private": true,
+  "type": "module",
   "description": "One-line file handoff CLI for agents",
-  "bin": {
-    "postdrop": "./dist/cli.js"
+  "bin": { "postdrop": "./dist/cli.js" },
+  "scripts": {
+    "build": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@postdrop/sdk": "workspace:^",
+    "commander": "^12.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.17.0",
+    "typescript": "^5.7.0"
   }
 }
