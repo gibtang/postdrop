@@ -86,6 +86,7 @@ export async function POST(req: NextRequest) {
 
   try {
     await getStorage().putStream(storageKey, req.body, { contentLength: sizeBytes });
+    await Drop.updateOne({ dropId: drop.dropId }, { storageKey });
   } catch (err) {
     await Drop.deleteOne({ dropId: drop.dropId });
     console.error("v1/drops: storage write failed:", err instanceof Error ? err.message : err);
