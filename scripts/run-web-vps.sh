@@ -74,7 +74,6 @@ curl -sk --resolve thepostdrop.dev:443:127.0.0.1 -o /dev/null -w "me(unauth): %{
 
 echo "== cleanup broken coolify app resource"
 T=$(cat /home/ubuntu/.pd-coolify-token)
-curl -s -X DELETE -H "Authorization: Bearer $T" "$API_DELETE_APP" >/dev/null 2>&1 || true
 AU=$(curl -s -H "Authorization: Bearer $T" "http://localhost:8000/api/v1/applications" | node -e "
 let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{
   const j=JSON.parse(d);const a=(j.data||j).find(x=>x.name==='postdrop');
