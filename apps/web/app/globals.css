@@ -16,3 +16,15 @@ body {
     -apple-system, sans-serif;
   -webkit-font-smoothing: antialiased;
 }
+
+.landing-shell {
+  background-color: #f8f8fc;
+  background-image:
+    radial-gradient(ellipse at 77% 4%, rgba(164, 157, 255, 0.17), transparent 31rem),
+    radial-gradient(ellipse at 4% 36%, rgba(211, 224, 255, 0.2), transparent 32rem),
+    linear-gradient(180deg, #fbfbfe 0%, #f7f7fb 48%, #fbfbfd 100%);
+}
+
+.landing-shell ::selection {
+  background: rgba(99, 91, 255, 0.18);
+}

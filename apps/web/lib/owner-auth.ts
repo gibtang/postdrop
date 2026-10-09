@@ -5,17 +5,23 @@ import { SESSION_COOKIE_NAME, SESSION_TTL, signSession, verifySession } from "./
 
 export { SESSION_COOKIE_NAME as SESSION_COOKIE, SESSION_TTL };
 import { Account, type AccountDoc } from "./models";
+import { isFirebaseAdminConfigured } from "./firebase/admin";
 
 const SCRYPT_KEYLEN = 64;
 
 /**
- * AUTH_MODE seam: only `password` is implemented. `firebase` is a reserved
- * module seam and fails fast with a clear error.
+ * AUTH_MODE seam: `firebase` is implemented via the pd_session cookie too, so
+ * the session path is mode-agnostic; password *login* stays password-mode only.
  */
 function requirePasswordMode(): void {
   if (process.env.AUTH_MODE === "firebase") {
-    throw new Error("AUTH_MODE=firebase is not implemented in this version");
+    throw new Error("AUTH_MODE=firebase does not support password login");
   }
+}
+
+/** True when the Firebase Admin SDK runtime env vars are present. */
+export function firebaseReady(): boolean {
+  return isFirebaseAdminConfigured();
 }
 
 function scryptKey(password: string, salt: Buffer): Promise<Buffer> {
@@ -71,7 +77,6 @@ export async function loginWithPassword(
 
 /** Reads the signed pd_session cookie and resolves the owning Account. */
 export async function requireOwner(): Promise<AccountDoc | null> {
-  requirePasswordMode();
   const jar = await cookies();
   const payload = verifySession(jar.get(SESSION_COOKIE_NAME)?.value);
   if (!payload) return null;

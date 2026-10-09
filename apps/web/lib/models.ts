@@ -5,12 +5,14 @@ const accountSchema = new Schema(
   {
     accountId: { type: String, required: true, default: () => newId("acct_"), unique: true },
     email: { type: String, required: true, unique: true },
+    firebaseUid: { type: String, default: null },
     passwordHash: { type: String },
     tier: { type: String, enum: ["free"], required: true, default: "free" },
     createdAt: { type: Date, required: true, default: () => new Date() },
   },
   { collection: "accounts" },
 );
+accountSchema.index({ firebaseUid: 1 }, { unique: true, sparse: true });
 
 const agentSchema = new Schema(
   {

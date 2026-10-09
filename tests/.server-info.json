@@ -1,1 +1,1 @@
-{"baseUrl":"http://localhost:3111","mongoUri":"mongodb://127.0.0.1:60267/postdrop","runId":"tmuzqk03bszsm","ownerEmail":"owner-tmuzqk03bszsm@postdrop.test","ownerPassword":"pw-tmuzqk03bszsm-secret"}
+{"baseUrl":"http://localhost:3111","mongoUri":"mongodb://127.0.0.1:50495/postdrop","runId":"tmv11ddt1dbe9","ownerEmail":"owner-tmv11ddt1dbe9@postdrop.test","ownerPassword":"pw-tmv11ddt1dbe9-secret"}
