@@ -40,6 +40,6 @@ MCP: `npx postdrop-mcp` (after npm publish) with `POSTDROP_API_KEY` env.
 
 ## Known limitations
 
-- Recipient email notifications are **off**: the reused Resend key is dead. New key → set `RESEND_API_KEY` + `RESEND_FROM`, restart container.
+- Recipient email notifications are **off**: no working mail credential. Chosen path: AWS SES in `eu-north-1` (console identities → verify `thepostdrop.dev`, DKIM CNAMEs via GoDaddy, `no-reply@` sender, SMTP/IAM creds) — or paste a valid Resend key. Either way: set `RESEND_API_KEY`-equivalent env + `RESEND_FROM`, swap transport in `lib/email.ts`, restart container.
 - Deploy is a Coolify-network container, not a Coolify-managed resource — ADR 0006.
 - Free tier: 100 MB total unpurged storage, 1 GB per file, links 1h–720h (default 7d).
