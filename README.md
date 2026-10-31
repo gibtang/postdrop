@@ -8,18 +8,18 @@ Open-source (Apache-2.0) sharing service for agent-made artifacts: your agents u
 
 1. Sign in at the dashboard (Google or email/password — email verification required for password accounts).
 2. Create a **token** (shown once, stored hashed).
-3. Agents publish artifacts and mint share links:
+3. Point your agent at the remote MCP server — no install needed:
 
-```bash
-export POSTDROP_TOKEN=pd_live_…
-npx postdrop-cli upload report.pdf --name "Q4 report"   # → prints a share URL
-npx postdrop-cli share art_… --expires 2026-12-31T00:00:00Z
-npx postdrop-cli list
+```
+URL:      BASE_URL/api/mcp        (https://thepostdrop.dev/api/mcp)
+Headers:  Authorization: Bearer <token>
+Tools:    upload_artifact, upload_artifact_from_url, list_artifacts,
+          get_artifact, share_artifact, unshare_artifact, delete_artifact
 ```
 
-MCP: point any agent at `BASE_URL/api/mcp` with an `Authorization: Bearer <token>` header — tools: `upload_artifact`, `upload_artifact_from_url`, `list_artifacts`, `get_artifact`, `share_artifact`, `unshare_artifact`, `delete_artifact`.
-
 REST: same verbs under `/v1` (`POST /v1/artifacts`, `GET /v1/artifacts`, `PATCH /v1/artifacts/:id`, `DELETE /v1/artifacts/:id`, `POST /v1/artifacts/:id/share`, …). Errors are `{error: {code, message}}`.
+
+CLI (optional, from source — not yet on npm): `pnpm --filter @postdrop/cli build && node packages/cli/dist/cli.js upload report.pdf --name "Q4 report.png"`.
 
 Share links are view-only, unguessable, and can carry an expiry. Agents and humans open the same URL.
 
