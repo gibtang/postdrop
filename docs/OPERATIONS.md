@@ -32,15 +32,7 @@ ssh ubuntu@66.70.190.82 'bash /home/ubuntu/postdrop/run-web.sh'   # builds image
 
 Remote MCP (no install) — point agents at `https://thepostdrop.dev/api/mcp` with `Authorization: Bearer <token>`. Tools: `upload_artifact`, `upload_artifact_from_url`, `list_artifacts`, `get_artifact`, `share_artifact`, `unshare_artifact`, `delete_artifact`.
 
-CLI (from source, optional):
-
-```bash
-export POSTDROP_TOKEN=pd_live_…          # dashboard → Tokens → New token (shown once)
-export POSTDROP_BASE_URL=https://thepostdrop.dev
-postdrop upload ./report.pdf --name "Q4 report.pdf"
-postdrop share art_… --expires 2026-12-31T00:00:00Z   # prints the share URL
-postdrop list / get / save / rm / shares / unshare / whoami
-```
+REST (same token): `https://thepostdrop.dev/v1/*`.
 
 ## Known limitations
 

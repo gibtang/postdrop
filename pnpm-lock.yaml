@@ -103,31 +103,6 @@ importers:
         specifier: ^4.0.0
         version: 4.3.3
 
-  packages/cli:
-    dependencies:
-      commander:
-        specifier: ^12.1.0
-        version: 12.1.0
-      postdrop-sdk:
-        specifier: workspace:^
-        version: link:../sdk
-    devDependencies:
-      '@types/node':
-        specifier: ^20.17.0
-        version: 20.19.43
-      typescript:
-        specifier: ^5.7.0
-        version: 5.9.3
-
-  packages/sdk:
-    devDependencies:
-      '@types/node':
-        specifier: ^20.17.0
-        version: 20.19.43
-      typescript:
-        specifier: ^5.7.0
-        version: 5.9.3
-
 packages:
 
   '@alloc/quick-lru@5.3.0':
@@ -1578,10 +1553,6 @@ packages:
   clsx@2.1.1:
     resolution: {integrity: sha512-eYm0QWBtUrBWZWG0d386OGAw16Z995PiOVo2B7bjWSbHedGl5e0ZWaq65kOGgUSNesEIDkB9ISbTg/JK9dhCZA==}
     engines: {node: '>=6'}
-
-  commander@12.1.0:
-    resolution: {integrity: sha512-Vw8qHK3bZM9y/P10u3Vib8o/DdkvA2OtPtZvD871QKjy74Wj1WSKFILMPRPSdUSx5RFK1arlJzEtA4PkFgnbuA==}
-    engines: {node: '>=18'}
 
   commondir@1.0.1:
     resolution: {integrity: sha512-W9pAhw0ja1Edb5GVdIF1mjZw/ASI0AlShXM83UUGe2DVr5TdAPEA1OA8m/g8zWp9x6On7gqufY+FatDbC3MDQg==}
@@ -3921,8 +3892,6 @@ snapshots:
   client-only@0.0.1: {}
 
   clsx@2.1.1: {}
-
-  commander@12.1.0: {}
 
   commondir@1.0.1: {}
 

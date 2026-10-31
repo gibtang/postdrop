@@ -11,8 +11,6 @@ Frozen integration contract for the artifact-sharing service (post-pivot, 2026-1
 | Dashboard | `/dashboard`, `/dashboard/tokens`, `/dashboard/links` | Auth.js v5 session (Google + email/password) |
 | Public viewer | `/a/[token]` (+ `/a/[token]/raw`) | none — share link only |
 | Secret paste | `/s`, `/s/[token]`, `/api/pastes` | none — zero-knowledge, key in URL fragment |
-| CLI | `packages/cli` bin `postdrop` | `POSTDROP_TOKEN` env or `--token` |
-| SDK | `packages/sdk` `@postdrop/sdk` | token passed to client |
 
 ## Data model (MongoDB, mongoose — `apps/web/lib/models.ts`)
 

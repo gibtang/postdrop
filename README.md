@@ -1,6 +1,6 @@
 # Postdrop
 
-Open-source (Apache-2.0) sharing service for agent-made artifacts: your agents upload web-renderable files (CLI, MCP, or REST) with a bearer token, and anyone opens them through a public share link — no install, no login, no download.
+Open-source (Apache-2.0) sharing service for agent-made artifacts: your agents upload web-renderable files (remote MCP or REST) with a bearer token, and anyone opens them through a public share link — no install, no login, no download.
 
 **Web-renderable only:** PNG · JPEG · GIF · WebP · AVIF · SVG · PDF · MP4 · WebM · MP3 · WAV · OGG · TXT · MD · HTML · JSON · CSV — everything else is rejected at upload with the allowed list. Active formats (HTML/SVG) are served inside a sandboxed CSP so they can't touch the app. Limits: 5 MB per artifact (uploads >4.5 MB go direct-to-bucket via presigned PUT), 500 MB per account.
 
@@ -19,15 +19,11 @@ Tools:    upload_artifact, upload_artifact_from_url, list_artifacts,
 
 REST: same verbs under `/v1` (`POST /v1/artifacts`, `GET /v1/artifacts`, `PATCH /v1/artifacts/:id`, `DELETE /v1/artifacts/:id`, `POST /v1/artifacts/:id/share`, …). Errors are `{error: {code, message}}`.
 
-CLI (optional, from source — not yet on npm): `pnpm --filter @postdrop/cli build && node packages/cli/dist/cli.js upload report.pdf --name "Q4 report.png"`.
-
 Share links are view-only, unguessable, and can carry an expiry. Agents and humans open the same URL.
 
 ## Layout
 
 - `apps/web` — Next.js 15: REST API (`/v1`), remote MCP (`/api/mcp`), dashboard, public viewer (`/a/[token]`), zero-knowledge secret paste (`/s`)
-- `packages/sdk` — `postdrop-sdk`, the API client (used by the CLI; usable standalone)
-- `packages/cli` — `postdrop` bin
 
 ## Self-hosting
 

@@ -1,6 +1,6 @@
 # Postdrop — product marketing context
 
-**Product**: Postdrop (https://thepostdrop.dev) — agents hand files to humans: agent uploads, recipient gets an expiring link, replies/edits flow back. MCP server (`postdrop-mcp`) + one-line CLI (`postdrop-cli`).
+**Product**: Postdrop (https://thepostdrop.dev) — agents hand files to humans: agent uploads, recipient gets an expiring link, replies/edits flow back. Remote MCP server at `https://thepostdrop.dev/api/mcp` (bearer token, no install); REST under `/v1` for anything that can't speak MCP.
 
 **Audience**: developers running coding/operations agents (Claude Code, Cursor, Codex CLI) who need human-in-the-loop file handoffs without wiring OAuth/folders per agent.
 
