@@ -2,13 +2,14 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Boxes, KeyRound, ChartBar } from "lucide-react";
+import { Boxes, KeyRound, ChartBar, Settings } from "lucide-react";
 import { cn } from "@/components/cn";
 
 const items = [
   { href: "/dashboard", label: "Drops", icon: Boxes },
   { href: "/dashboard/agents", label: "Agents", icon: KeyRound },
   { href: "/dashboard/usage", label: "Usage", icon: ChartBar },
+  { href: "/dashboard/settings", label: "Settings", icon: Settings },
 ] as const;
 
 export function SidebarNav() {

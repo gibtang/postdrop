@@ -53,7 +53,7 @@ echo "app: $APP_UUID"
 
 echo "== envs"
 ENVS_JSON=$(node -e "
-const e={BASE_URL:'https://thepostdrop.dev',AUTH_MODE:'password',OWNER_EMAIL:'gibtang@gmail.com',OWNER_PASSWORD:process.env.OWNER_PASSWORD,SESSION_SECRET:process.env.SESSION_SECRET,MONGODB_URI:'mongodb://postdrop:'+process.env.MONGO_PASSWORD+'@postdrop-mongo:27017/postdrop?authSource=admin',STORAGE_DRIVER:'s3',S3_ENDPOINT:'https://s3.us-east-005.backblazeb2.com',S3_REGION:'us-east-005',S3_BUCKET:process.env.S3_BUCKET,S3_ACCESS_KEY_ID:process.env.S3_ACCESS_KEY_ID,S3_SECRET_ACCESS_KEY:process.env.S3_SECRET_ACCESS_KEY,RESEND_API_KEY:process.env.RESEND_API_KEY||'re_placeholder',RESEND_FROM:process.env.RESEND_FROM||'drops@thepostdrop.dev'};
+const e={BASE_URL:'https://thepostdrop.dev',AUTH_SECRET:process.env.AUTH_SECRET,AUTH_TRUST_HOST:'true',GOOGLE_CLIENT_ID:process.env.GOOGLE_CLIENT_ID,GOOGLE_CLIENT_SECRET:process.env.GOOGLE_CLIENT_SECRET,MONGODB_URI:'mongodb://postdrop:'+process.env.MONGO_PASSWORD+'@postdrop-mongo:27017/postdrop?authSource=admin',STORAGE_DRIVER:'s3',S3_ENDPOINT:'https://s3.us-east-005.backblazeb2.com',S3_REGION:'us-east-005',S3_BUCKET:process.env.S3_BUCKET,S3_ACCESS_KEY_ID:process.env.S3_ACCESS_KEY_ID,S3_SECRET_ACCESS_KEY:process.env.S3_SECRET_ACCESS_KEY,RESEND_API_KEY:process.env.RESEND_API_KEY||'re_placeholder',RESEND_FROM:process.env.RESEND_FROM||'drops@thepostdrop.dev'};
 process.stdout.write(JSON.stringify({data:Object.entries(e).map(([key,value])=>({key,value}))}));
 ")
 curl -s -o /dev/null -w "envs: %{http_code}\n" -X PATCH -H "Authorization: Bearer $T" -H "Content-Type: application/json" -d "$ENVS_JSON" "$API/applications/$APP_UUID/envs/bulk"

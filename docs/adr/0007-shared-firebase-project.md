@@ -1,6 +1,6 @@
 # Shared Firebase project (stork-ticker) for Postdrop auth
 
-Status: supersedes [ADR 0001](./0001-separate-firebase-project.md).
+Status: superseded by [ADR 0010](./0010-nextauth-dual-provider-auth.md) (2026-10-31 pivot). Previously superseded [ADR 0001](./0001-separate-firebase-project.md).
 
 Postdrop's dashboard needs Firebase Auth before outside users arrive. Creating a fresh Firebase project required interactive console work and a new service account. Gibson directed (2026-10-08) that Postdrop reuse the Firebase project agent-utils production runs on — project id `stork-ticker` — using the same service-account credentials extracted from the live agent-utils container.
 

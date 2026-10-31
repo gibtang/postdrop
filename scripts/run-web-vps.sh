@@ -8,18 +8,10 @@ cd "$BASE"
 set -a
 source secrets.env
 source secrets-b2.env
-source secrets-firebase.env
 set +a
 
 echo "== image"
-docker build -t postdrop-web:local src \
-  --build-arg NEXT_PUBLIC_FIREBASE_API_KEY="$NEXT_PUBLIC_FIREBASE_API_KEY" \
-  --build-arg NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN="$NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN" \
-  --build-arg NEXT_PUBLIC_FIREBASE_PROJECT_ID="$NEXT_PUBLIC_FIREBASE_PROJECT_ID" \
-  --build-arg NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET="$NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET" \
-  --build-arg NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID="$NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID" \
-  --build-arg NEXT_PUBLIC_FIREBASE_APP_ID="$NEXT_PUBLIC_FIREBASE_APP_ID" \
-  > /tmp/build.log 2>&1
+docker build -t postdrop-web:local src > /tmp/build.log 2>&1
 tail -1 /tmp/build.log
 
 echo "== container"
@@ -27,10 +19,10 @@ docker rm -f postdrop-web >/dev/null 2>&1 || true
 docker run -d --name postdrop-web --restart unless-stopped --network coolify \
   -e BASE_URL="https://thepostdrop.dev" \
   -e HOSTNAME=0.0.0.0 \
-  -e AUTH_MODE=firebase \
-  -e OWNER_EMAIL="gibtang@gmail.com" \
-  -e OWNER_PASSWORD="$OWNER_PASSWORD" \
-  -e SESSION_SECRET="$SESSION_SECRET" \
+  -e AUTH_SECRET="$AUTH_SECRET" \
+  -e AUTH_TRUST_HOST=true \
+  -e GOOGLE_CLIENT_ID="$GOOGLE_CLIENT_ID" \
+  -e GOOGLE_CLIENT_SECRET="$GOOGLE_CLIENT_SECRET" \
   -e MONGODB_URI="mongodb://postdrop:$MONGO_PASSWORD@postdrop-mongo:27017/postdrop?authSource=admin" \
   -e STORAGE_DRIVER=s3 \
   -e S3_ENDPOINT="https://s3.us-east-005.backblazeb2.com" \
@@ -40,9 +32,6 @@ docker run -d --name postdrop-web --restart unless-stopped --network coolify \
   -e S3_SECRET_ACCESS_KEY="$S3_SECRET_ACCESS_KEY" \
   -e RESEND_API_KEY="$RESEND_API_KEY" \
   -e RESEND_FROM="$RESEND_FROM" \
-  -e FIREBASE_PROJECT_ID="$FIREBASE_PROJECT_ID" \
-  -e FIREBASE_CLIENT_EMAIL="$FIREBASE_CLIENT_EMAIL" \
-  -e FIREBASE_PRIVATE_KEY="$FIREBASE_PRIVATE_KEY" \
   -l traefik.docker.network=coolify \
   -l traefik.enable=true \
   -l traefik.http.middlewares.postdrop-gzip.compress=true \
@@ -70,7 +59,7 @@ done
 
 echo "== via traefik (host loopback, SNI thepostdrop.dev)"
 curl -sk --resolve thepostdrop.dev:443:127.0.0.1 -o /dev/null -w "login: %{http_code}\n" "https://thepostdrop.dev/login"
-curl -sk --resolve thepostdrop.dev:443:127.0.0.1 -o /dev/null -w "me(unauth): %{http_code}\n" "https://thepostdrop.dev/api/auth/me"
+curl -sk --resolve thepostdrop.dev:443:127.0.0.1 -o /dev/null -w "me(unauth): %{http_code}\n" "https://thepostdrop.dev/v1/me"
 
 echo "== cleanup broken coolify app resource"
 T=$(cat /home/ubuntu/.pd-coolify-token)

@@ -11,21 +11,15 @@ docker build -t postdrop-web:local src
 echo "== secrets"
 if [ ! -f secrets.env ]; then
   MONGO_PW=$(openssl rand -hex 16)
-  SESSION=$(openssl rand -hex 32)
-  OWNER_PW=$(openssl rand -base64 18 | tr '+/' '-_')
+  AUTH_SEC=$(openssl rand -base64 32)
   cat > secrets.env <<EOF
 MONGO_PASSWORD=$MONGO_PW
-SESSION_SECRET=$SESSION
-OWNER_PASSWORD=$OWNER_PW
+AUTH_SECRET=$AUTH_SEC
+# Google OAuth client (console.cloud.google.com → OAuth client); required for login
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=
 EOF
   chmod 600 secrets.env
-  {
-    echo "Postdrop owner login"
-    echo "URL: https://thepostdrop.dev/login"
-    echo "email: gibtang@gmail.com"
-    echo "password: $OWNER_PW"
-  } > owner-credentials.txt
-  chmod 600 owner-credentials.txt
 fi
 source secrets.env
 source secrets-b2.env
@@ -48,10 +42,10 @@ services:
       - mongo
     environment:
       - BASE_URL=https://thepostdrop.dev
-      - AUTH_MODE=password
-      - OWNER_EMAIL=gibtang@gmail.com
-      - OWNER_PASSWORD=$OWNER_PASSWORD
-      - SESSION_SECRET=$SESSION_SECRET
+      - AUTH_SECRET=$AUTH_SECRET
+      - AUTH_TRUST_HOST=true
+      - GOOGLE_CLIENT_ID=$GOOGLE_CLIENT_ID
+      - GOOGLE_CLIENT_SECRET=$GOOGLE_CLIENT_SECRET
       - MONGODB_URI=mongodb://postdrop:$MONGO_PASSWORD@mongo:27017/postdrop?authSource=admin
       - STORAGE_DRIVER=s3
       - S3_ENDPOINT=https://s3.us-east-005.backblazeb2.com

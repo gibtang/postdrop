@@ -1,53 +1,49 @@
 # Postdrop
 
-A standalone file-drop service for agents: an Agent uploads a file, a Recipient gets an expiring Link, and Replies and Edits flow back to the originating Agent.
+A multi-user sharing service: people sign in, create tokens, and let agents publish web-renderable artifacts that anyone can open through public share links.
 
 ## Language
 
-**Drop**:
-One file an Agent sends to a Recipient, plus at most one Reply and one Edit that come back through its Link.
-_Avoid_: handoff, transfer, upload (as noun), package
+**User**:
+A person who signs in with Google or email/password and owns artifacts, tokens, and share links.
+_Avoid_: account, owner, member, tenant, workspace
 
-**Account**:
-The billable owner of Agents; one developer per Account.
-_Avoid_: user, organization, tenant, workspace
+**Token**:
+A bearer credential a User creates by hand to give agents API access; every token acts as its User.
+_Avoid_: API key, agent key, agent, credential, key (alone)
 
-**Agent**:
-The holder of an Agent key; creates Drops on behalf of an Account. An Account may have several Agents, isolated from each other.
-_Avoid_: bot, client, user
-
-**Recipient**:
-The person a Drop is addressed to; receives the notification and the Link. Never logs in; the Link is their only access.
-_Avoid_: human, user, customer, receiver
-
-**Reply**:
-Text a Recipient sends back on a Drop.
-_Avoid_: comment, message, response
+**Artifact**:
+One web-renderable file owned by exactly one User, addressable by id.
+_Avoid_: drop, upload (as noun), file entry, attachment, package
 
 **Edit**:
-A replacement file a Recipient uploads to a Drop.
-_Avoid_: revision, updated file, attachment
+A User replacing an Artifact's content in place; the Artifact's identity and share URLs survive.
+_Avoid_: revision, version, updated file, recipient edit
 
-**Link**:
-An expiring token URL that grants access to exactly one Drop.
-_Avoid_: share URL, public link, token
+**Renderable format**:
+A file type Postdrop accepts because browsers display it inline — images, PDF, audio, video, and plain-text-ish types. Everything else is rejected at upload.
+_Avoid_: web-compatible, browser-safe, supported file
 
-**Agent key**:
-A credential identifying exactly one Agent; the scope boundary for all API access.
-_Avoid_: API key, credential, token
+**Share link**:
+A public, unguessable, view-only URL that resolves to exactly one Artifact; may carry an expiry. Anyone — person or agent — with the URL can open it.
+_Avoid_: link (alone), public link, download link, magic link
 
-**Answered**:
-A Drop whose Recipient has sent a Reply and/or an Edit.
-_Avoid_: completed, resolved, closed
+**Expired link**:
+A Share link past its expiry: it stops resolving while the Artifact itself remains untouched.
+_Avoid_: purged, deleted, revoked link, dead
 
-**Expired**:
-A Drop whose Link has passed expiry; content is purged and only metadata remains.
-_Avoid_: deleted, revoked, dead
+**Viewer**:
+The public page a Share link opens, showing the Artifact inline.
+_Avoid_: link page, download page, drop page, preview
+
+**Sandboxed content**:
+Active formats (HTML, SVG) served inside the Viewer in a way that isolates them from Postdrop's own origin.
+_Avoid_: trusted content, raw HTML
+
+**Secret link**:
+A zero-knowledge one-time link from the free /s tool: the sender's browser encrypts the content (AES-GCM), the key lives in the URL fragment and is never sent to the server, and the ciphertext is deleted after one view or at expiry. Not an Artifact — no User, Token, or Share link involved.
+_Avoid_: private link, encrypted link
 
 **Dashboard**:
-The authenticated area where the Account owner manages Agent keys, Drops, and usage.
+The authenticated area where a User manages artifacts, share links, and tokens.
 _Avoid_: admin panel, console, backend, admin
-
-**Link page**:
-The public page a Link opens; where the Recipient downloads, Replies, and Edits.
-_Avoid_: viewer, share page, drop page

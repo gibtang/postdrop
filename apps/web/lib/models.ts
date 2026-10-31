@@ -1,69 +1,134 @@
 import mongoose, { Schema, type Model, type InferSchemaType } from "mongoose";
 import { newId } from "./ids";
 
-const accountSchema = new Schema(
+/**
+ * Auth.js v5 (MongoDB adapter) owns the core identity fields; passwordHash is
+ * null for Google-only users. email is unique and lowercased.
+ */
+const userSchema = new Schema(
   {
-    accountId: { type: String, required: true, default: () => newId("acct_"), unique: true },
-    email: { type: String, required: true, unique: true },
-    firebaseUid: { type: String, default: null },
-    passwordHash: { type: String },
-    tier: { type: String, enum: ["free"], required: true, default: "free" },
+    email: { type: String, required: true, unique: true, lowercase: true, trim: true },
+    emailVerified: { type: Date, default: null },
+    name: { type: String, default: null },
+    image: { type: String, default: null },
+    passwordHash: { type: String, default: null },
     createdAt: { type: Date, required: true, default: () => new Date() },
   },
-  { collection: "accounts" },
+  { collection: "users" },
 );
-accountSchema.index({ firebaseUid: 1 }, { unique: true, sparse: true });
 
-const agentSchema = new Schema(
+const verificationTokenSchema = new Schema(
   {
-    agentId: { type: String, required: true, default: () => newId("agnt_"), unique: true },
-    accountId: { type: String, required: true },
+    userId: { type: String, required: true },
+    tokenHash: { type: String, required: true, unique: true },
+    purpose: { type: String, enum: ["verify", "reset"], required: true },
+    expiresAt: { type: Date, required: true },
+    usedAt: { type: Date, default: null },
+    createdAt: { type: Date, required: true, default: () => new Date() },
+  },
+  { collection: "verification_tokens" },
+);
+verificationTokenSchema.index({ userId: 1, purpose: 1 });
+
+const tokenSchema = new Schema(
+  {
+    tokenId: { type: String, required: true, default: () => newId("tok_"), unique: true },
+    userId: { type: String, required: true },
     name: { type: String, required: true },
     keyHash: { type: String, required: true, unique: true },
     keyPrefix: { type: String, required: true },
-    revokedAt: { type: Date },
+    revokedAt: { type: Date, default: null },
+    lastUsedAt: { type: Date, default: null },
     createdAt: { type: Date, required: true, default: () => new Date() },
   },
-  { collection: "agents" },
+  { collection: "tokens" },
 );
-agentSchema.index({ accountId: 1 });
+tokenSchema.index({ userId: 1 });
 
-const dropSchema = new Schema(
+const artifactSchema = new Schema(
   {
-    dropId: { type: String, required: true, default: () => newId("drop_"), unique: true },
-    accountId: { type: String, required: true },
-    agentId: { type: String, required: true },
-    recipientEmail: { type: String, required: true },
+    artifactId: { type: String, required: true, default: () => newId("art_"), unique: true },
+    userId: { type: String, required: true },
     filename: { type: String, required: true },
+    contentType: { type: String, required: true },
+    size: { type: Number, required: true },
+    storageKey: { type: String, required: true },
+    createdAt: { type: Date, required: true, default: () => new Date() },
+    updatedAt: { type: Date, required: true, default: () => new Date() },
+  },
+  { collection: "artifacts" },
+);
+artifactSchema.index({ userId: 1, createdAt: -1 });
+
+const shareLinkSchema = new Schema(
+  {
+    linkId: { type: String, required: true, default: () => newId("slnk_"), unique: true },
+    linkToken: { type: String, required: true, unique: true },
+    artifactId: { type: String, required: true },
+    userId: { type: String, required: true },
+    createdAt: { type: Date, required: true, default: () => new Date() },
+    revokedAt: { type: Date, default: null },
+    expiresAt: { type: Date, default: null },
+    expiredAt: { type: Date, default: null },
+  },
+  { collection: "share_links" },
+);
+shareLinkSchema.index({ artifactId: 1 });
+shareLinkSchema.index({ userId: 1 });
+
+const eventSchema = new Schema(
+  {
+    eventId: { type: String, required: true, default: () => newId("evt_"), unique: true },
+    userId: { type: String, required: true },
+    type: { type: String, required: true },
+    data: { type: Schema.Types.Mixed, default: null },
+    createdAt: { type: Date, required: true, default: () => new Date() },
+  },
+  { collection: "events" },
+);
+eventSchema.index({ userId: 1, createdAt: -1 });
+
+const pasteSchema = new Schema(
+  {
+    pasteId: { type: String, required: true, default: () => newId("paste_"), unique: true },
+    tokenHash: { type: String, required: true, unique: true },
+    kind: { type: String, enum: ["text", "file"], required: true },
+    filename: { type: String, default: null },
+    mimeType: { type: String, default: null },
     sizeBytes: { type: Number, required: true },
-    mimeType: { type: String, required: true, default: "application/octet-stream" },
-    storageKey: { type: String, default: null },
-    status: { type: String, enum: ["pending", "answered", "expired"], required: true, default: "pending" },
-    linkTokenHash: { type: String, required: true, unique: true },
-    replyText: { type: String, default: null },
-    editStorageKey: { type: String, default: null },
-    editFilename: { type: String, default: null },
-    editSizeBytes: { type: Number, default: null },
-    editMimeType: { type: String, default: null },
+    iv: { type: String, required: true },
+    ciphertext: { type: Buffer, default: null },
     expiresAt: { type: Date, required: true },
-    answeredAt: { type: Date, default: null },
-    notifiedAt: { type: Date, default: null },
+    burnedAt: { type: Date, default: null },
     purgedAt: { type: Date, default: null },
     createdAt: { type: Date, required: true, default: () => new Date() },
   },
-  { collection: "drops" },
+  { collection: "pastes" },
 );
-dropSchema.index({ agentId: 1, createdAt: -1 });
-dropSchema.index({ status: 1, expiresAt: 1 });
-dropSchema.index({ accountId: 1, createdAt: -1 });
+pasteSchema.index({ expiresAt: 1 });
 
-export type AccountDoc = mongoose.HydratedDocument<InferSchemaType<typeof accountSchema>>;
-export type AgentDoc = mongoose.HydratedDocument<InferSchemaType<typeof agentSchema>>;
-export type DropDoc = mongoose.HydratedDocument<InferSchemaType<typeof dropSchema>>;
+export type UserDoc = mongoose.HydratedDocument<InferSchemaType<typeof userSchema>>;
+export type VerificationTokenDoc = mongoose.HydratedDocument<
+  InferSchemaType<typeof verificationTokenSchema>
+>;
+export type TokenDoc = mongoose.HydratedDocument<InferSchemaType<typeof tokenSchema>>;
+export type ArtifactDoc = mongoose.HydratedDocument<InferSchemaType<typeof artifactSchema>>;
+export type ShareLinkDoc = mongoose.HydratedDocument<InferSchemaType<typeof shareLinkSchema>>;
+export type EventDoc = mongoose.HydratedDocument<InferSchemaType<typeof eventSchema>>;
+export type PasteDoc = mongoose.HydratedDocument<InferSchemaType<typeof pasteSchema>>;
 
-export const Account: Model<AccountDoc> =
-  mongoose.models.Account ?? mongoose.model<AccountDoc>("Account", accountSchema);
-export const Agent: Model<AgentDoc> =
-  mongoose.models.Agent ?? mongoose.model<AgentDoc>("Agent", agentSchema);
-export const Drop: Model<DropDoc> =
-  mongoose.models.Drop ?? mongoose.model<DropDoc>("Drop", dropSchema);
+export const User: Model<UserDoc> =
+  mongoose.models.User ?? mongoose.model<UserDoc>("User", userSchema);
+export const VerificationToken: Model<VerificationTokenDoc> =
+  mongoose.models.VerificationToken ??
+  mongoose.model<VerificationTokenDoc>("VerificationToken", verificationTokenSchema);
+export const Token: Model<TokenDoc> =
+  mongoose.models.Token ?? mongoose.model<TokenDoc>("Token", tokenSchema);
+export const Artifact: Model<ArtifactDoc> =
+  mongoose.models.Artifact ?? mongoose.model<ArtifactDoc>("Artifact", artifactSchema);
+export const ShareLink: Model<ShareLinkDoc> =
+  mongoose.models.ShareLink ?? mongoose.model<ShareLinkDoc>("ShareLink", shareLinkSchema);
+export const Event: Model<EventDoc> =
+  mongoose.models.Event ?? mongoose.model<EventDoc>("Event", eventSchema);
+export const Paste: Model<PasteDoc> =
+  mongoose.models.Paste ?? mongoose.model<PasteDoc>("Paste", pasteSchema);

@@ -6,23 +6,23 @@ export function c32hex(): string {
   return randomBytes(16).toString("hex");
 }
 
-export type IdPrefix = "acct_" | "agnt_" | "drop_";
+export type IdPrefix = "art_" | "tok_" | "slnk_" | "paste_" | "evt_";
 
 export function newId(prefix: IdPrefix): string {
   return prefix + c32hex();
 }
 
-/** Generates a full agent key + its stored hash/prefix pair. */
-export function newAgentKey(): {
-  key: string;
-  keyHash: string;
-  keyPrefix: string;
+/** Generates a full bearer token + its stored hash/prefix pair. */
+export function newToken(): {
+  token: string;
+  tokenHash: string;
+  tokenPrefix: string;
 } {
   const secret = randomBytes(32).toString("hex");
-  const key = `pd_live_${secret}`;
+  const token = `pd_live_${secret}`;
   return {
-    key,
-    keyHash: sha256Hex(key),
-    keyPrefix: `pd_live_${secret.slice(0, 6)}`,
+    token,
+    tokenHash: sha256Hex(token),
+    tokenPrefix: `pd_live_${secret.slice(0, 6)}`,
   };
 }

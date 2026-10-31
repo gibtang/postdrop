@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "One-line file handoff CLI for agents",
+  "description": "Share web-renderable artifacts with anyone, from the terminal.",
   "bin": { "postdrop": "./dist/cli.js" },
   "scripts": {
     "build": "tsc -p tsconfig.json"

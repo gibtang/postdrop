@@ -9,6 +9,10 @@ export interface Storage {
   ): Promise<void>;
   getStream(key: string): Promise<ReadableStream>;
   remove(key: string): Promise<void>;
+  /** Object metadata without reading the body; null when the key is absent. */
+  head(key: string): Promise<{ size: number; contentType: string } | null>;
+  /** Short-lived direct-to-storage PUT URL for client-side uploads. */
+  presignPut(key: string, contentType: string): Promise<{ url: string }>;
 }
 
 export function getStorage(): Storage {
@@ -25,10 +29,6 @@ export function sanitizeFilename(name: string): string {
   return (cleaned || "file").slice(0, 200);
 }
 
-export function originalKey(dropId: string, filename: string): string {
-  return `drops/${dropId}/original-${sanitizeFilename(filename)}`;
-}
-
-export function editKey(dropId: string, filename: string): string {
-  return `drops/${dropId}/edit-${sanitizeFilename(filename)}`;
+export function artifactKey(artifactId: string, filename: string): string {
+  return `artifacts/${artifactId}/${sanitizeFilename(filename)}`;
 }

@@ -1,629 +1,707 @@
-import { execFile } from "node:child_process";
-import { createHash, randomBytes } from "node:crypto";
-import { readFileSync } from "node:fs";
-import { mkdtemp, mkdir, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
-import http from "node:http";
-import { promisify } from "node:util";
-import mongoose from "../apps/web/node_modules/mongoose";
-import { beforeAll, describe, expect, it } from "vitest";
-// Static import from packages/mcp's own dependency copy (root has no direct dep).
-import type { Client } from "../packages/mcp/node_modules/@modelcontextprotocol/sdk/dist/esm/client/index.js";
-import type { StdioClientTransport } from "../packages/mcp/node_modules/@modelcontextprotocol/sdk/dist/esm/client/stdio.js";
-import type { ServerInfo } from "./global-setup";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { randomBytes, randomUUID } from "node:crypto";
+import {
+  BASE,
+  RUN,
+  MAX_ARTIFACT_BYTES,
+  QUOTA_BYTES,
+  connectDb,
+  closeDb,
+  collection,
+  seedUser,
+  seedTokenForUser,
+  revokeToken,
+  bearer,
+  upload,
+  patchArtifact,
+  createShare,
+  json,
+  storageHasExactBytes,
+  storageFileCount,
+  makeKey,
+  PNG_BYTES,
+  pngBytesAlt,
+  pdfBytes,
+  txtBytes,
+  HTML_BYTES,
+  SVG_BYTES,
+  DOCX_BYTES,
+  oversizedBytes,
+  type Artifact,
+  type ShareLink,
+  type ApiError,
+} from "./helpers";
 
-const execFileP = promisify(execFile);
+// Quota is per-user and seeded small, so every section seeds its own user to
+// keep cumulative stored bytes far below QUOTA_BYTES.
+let aliceKey: string;
+let aliceId: string;
+let bobKey: string;
+let bobId: string;
 
-const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const info: ServerInfo = JSON.parse(
-  readFileSync(path.join(__dirname, ".server-info.json"), "utf8"),
-) as ServerInfo; // known author-time shape written by globalSetup
-const BASE = info.baseUrl;
-const RUN = info.runId;
-
-const MCP_SDK = "../packages/mcp/node_modules/@modelcontextprotocol/sdk/dist/esm";
-const A_ORIGINAL_LEN = 256 * 1024 + 7;
-const A_EDIT_LEN = 128 * 1024 + 13;
-const FREE_CAP_BYTES = 104_857_600;
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-interface OwnerSession {
-  cookie: string;
+async function newUser(label: string): Promise<{ key: string; userId: string }> {
+  const u = await seedUser(`${label}-${RUN}@postdrop.test`, label);
+  return { key: u.key, userId: u.userId };
 }
-
-async function login(email: string, password: string): Promise<{ res: Response; cookie?: string }> {
-  const res = await fetch(`${BASE}/api/auth/login`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ email, password }),
-  });
-  const setCookie = res.headers.get("set-cookie");
-  return { res, cookie: setCookie?.split(";")[0] };
-}
-
-async function ownerSession(): Promise<OwnerSession> {
-  const { res, cookie } = await login(info.ownerEmail, info.ownerPassword);
-  expect(res.status).toBe(200);
-  expect(cookie).toBeTruthy();
-  return { cookie: cookie as string };
-}
-
-async function createAgent(session: OwnerSession, name: string): Promise<string> {
-  const res = await fetch(`${BASE}/api/agents`, {
-    method: "POST",
-    headers: { "content-type": "application/json", cookie: session.cookie },
-    body: JSON.stringify({ name }),
-  });
-  expect(res.status).toBe(201);
-  const body = (await res.json()) as { key: string }; // 201 shape from /api/agents contract
-  expect(body.key).toMatch(/^pd_live_[0-9a-f]{64}$/);
-  return body.key;
-}
-
-interface Uploaded {
-  dropId: string;
-  linkUrl: string;
-  token: string;
-  filename: string;
-  sizeBytes: number;
-  expiresAt: string;
-}
-
-async function upload(
-  apiKey: string,
-  bytes: Buffer,
-  opts: {
-    recipientEmail: string;
-    filename?: string;
-    ttlHours?: number;
-  },
-): Promise<Response> {
-  const headers: Record<string, string> = {
-    authorization: `Bearer ${apiKey}`,
-    "x-filename": opts.filename ?? "file.bin",
-    "x-recipient-email": opts.recipientEmail,
-    "content-type": "application/octet-stream",
-    "content-length": String(bytes.length),
-  };
-  if (opts.ttlHours !== undefined) headers["x-ttl-hours"] = String(opts.ttlHours);
-  return fetch(`${BASE}/v1/drops`, { method: "POST", headers, body: bytes });
-}
-
-async function uploadOk(
-  apiKey: string,
-  bytes: Buffer,
-  opts: { recipientEmail: string; filename?: string; ttlHours?: number },
-): Promise<Uploaded> {
-  const res = await upload(apiKey, bytes, opts);
-  if (res.status !== 201) {
-    throw new Error(`upload failed: ${res.status} ${await res.text()}`);
-  }
-  const body = (await res.json()) as Omit<Uploaded, "token">; // 201 shape per contract
-  expect(body.linkUrl.startsWith(`${BASE}/l/`)).toBe(true);
-  expect(body.sizeBytes).toBe(bytes.length);
-  const token = body.linkUrl.slice(`${BASE}/l/`.length);
-  expect(token).toMatch(/^[0-9a-f]{64}$/);
-  return { ...body, token };
-}
-
-async function revoke(apiKey: string, dropId: string): Promise<Response> {
-  return fetch(`${BASE}/v1/drops/${dropId}/revoke`, {
-    method: "POST",
-    headers: { authorization: `Bearer ${apiKey}` },
-  });
-}
-
-async function replyOnLink(token: string, text: string): Promise<Response> {
-  return fetch(`${BASE}/l/${token}/reply`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ text }),
-  });
-}
-
-async function findDropIdByFilename(apiKey: string, filename: string): Promise<string | undefined> {
-  const res = await fetch(`${BASE}/v1/drops`, {
-    headers: { authorization: `Bearer ${apiKey}` },
-  });
-  const body = (await res.json()) as { drops: Array<{ dropId: string; filename: string }> };
-  return body.drops.find((d) => d.filename === filename)?.dropId;
-}
-
-/** Raw HTTP request with a forged Content-Length, sending only a tiny body. */
-function rawUploadWithDeclaredLength(
-  apiKey: string,
-  declaredBytes: number,
-  actualBytes: number,
-): Promise<{ status: number; body: string }> {
-  // Node 20 lacks Promise.withResolvers
-  let resolveDone!: (v: { status: number; body: string }) => void;
-  let rejectDone!: (e: unknown) => void;
-  const done = new Promise<{ status: number; body: string }>((resolve, reject) => {
-    resolveDone = resolve;
-    rejectDone = reject;
-  });
-  const req = http.request(
-    {
-      host: "localhost",
-      port: 3111,
-      method: "POST",
-      path: "/v1/drops",
-      headers: {
-        authorization: `Bearer ${apiKey}`,
-        "x-filename": "huge.bin",
-        "x-recipient-email": `huge-${RUN}@postdrop.test`,
-        "x-ttl-hours": "24",
-        "content-type": "application/octet-stream",
-        "content-length": String(declaredBytes),
-      },
-    },
-    (res) => {
-      const chunks: Buffer[] = [];
-      res.on("data", (c: Buffer) => chunks.push(c));
-      res.on("end", () => {
-        resolveDone({ status: res.statusCode ?? 0, body: Buffer.concat(chunks).toString() });
-        req.destroy(); // body never completed; server answered from headers alone
-      });
-    },
-  );
-  req.on("error", () => undefined); // socket destroyed after response is expected
-  req.write(Buffer.alloc(actualBytes)); // do NOT end(): content-length is intentionally larger
-  return done;
-}
-
-const mcpEnv = (key: string): Record<string, string> => ({
-  ...(process.env as Record<string, string>),
-  POSTDROP_API_KEY: key,
-  POSTDROP_BASE_URL: BASE,
-});
-
-async function mcpSpawn(key: string): Promise<{ client: Client; transport: StdioClientTransport }> {
-  const { Client: McpClient } = await import(`${MCP_SDK}/client/index.js`);
-  const { StdioClientTransport: StdioTransport } = await import(`${MCP_SDK}/client/stdio.js`);
-  const transport = new StdioTransport({
-    command: "node",
-    args: [path.join(repoRoot, "packages/mcp/dist/mcp.js")],
-    env: mcpEnv(key),
-  });
-  const client = new McpClient({ name: "postdrop-acceptance", version: "0.0.0" });
-  await client.connect(transport);
-  return { client, transport };
-}
-
-async function writeTempFile(name: string, bytes: Buffer): Promise<string> {
-  const dir = await mkdtemp(path.join(tmpdir(), "postdrop-test-"));
-  const file = path.join(dir, name);
-  await writeFile(file, bytes);
-  return file;
-}
-
-interface CliResult {
-  stdout: string;
-  stderr: string;
-  code: number;
-}
-
-async function cli(args: string[], key: string): Promise<CliResult> {
-  try {
-    const { stdout, stderr } = await execFileP(
-      "node",
-      [path.join(repoRoot, "packages/cli/dist/cli.js"), ...args],
-      { env: mcpEnv(key) },
-    );
-    return { stdout, stderr, code: 0 };
-  } catch (err) {
-    const e = err as { code?: number | string; stdout?: string; stderr?: string };
-    return { stdout: e.stdout ?? "", stderr: e.stderr ?? "", code: Number(e.code ?? -1) };
-  }
-}
-
-async function dropRow(dropId: string): Promise<Record<string, unknown> | null> {
-  // mongoose is the driver apps/web ships; read tombstones through its native db handle
-  if (!mongoose.connection.readyState) await mongoose.connect(info.mongoUri);
-  return mongoose.connection.db!.collection("drops").findOne({ dropId });
-}
-
-// ---------------------------------------------------------------------------
-// Shared fixtures
-// ---------------------------------------------------------------------------
-
-let session: OwnerSession;
-let keyA = "";
-let keyB = "";
 
 beforeAll(async () => {
-  session = await ownerSession();
-  keyA = await createAgent(session, `acceptance-a-${RUN}`);
-  keyB = await createAgent(session, `acceptance-b-${RUN}`);
+  await connectDb();
+  const alice = await seedUser(`alice-${RUN}@postdrop.test`, "Alice");
+  const bob = await seedUser(`bob-${RUN}@postdrop.test`, "Bob");
+  aliceKey = alice.key;
+  aliceId = alice.userId;
+  bobKey = bob.key;
+  bobId = bob.userId;
+});
+
+afterAll(async () => {
+  await closeDb();
 });
 
 // ---------------------------------------------------------------------------
-// A — whole loop with a real file
+// 1 — token auth
 // ---------------------------------------------------------------------------
 
-describe("A: whole loop with a real file", () => {
-  const original = randomBytes(A_ORIGINAL_LEN);
-  const edited = randomBytes(A_EDIT_LEN);
-  const replyText = `reply from acceptance A run ${RUN}`;
-  let drop: Uploaded;
-
-  it("upload via /v1 then meta + byte-identical file via /l", async () => {
-    drop = await uploadOk(keyA, original, {
-      recipientEmail: `recipient-a-${RUN}@postdrop.test`,
-      filename: "original-report.bin",
-      ttlHours: 48,
-    });
-    expect(drop.dropId).toMatch(/^drop_[0-9a-f]{32}$/);
-
-    const metaRes = await fetch(`${BASE}/l/${drop.token}/meta`);
-    expect(metaRes.status).toBe(200);
-    const meta = (await metaRes.json()) as { filename: string; sizeBytes: number };
-    expect(meta.filename).toBe("original-report.bin");
-    expect(meta.sizeBytes).toBe(original.length);
-
-    const fileRes = await fetch(`${BASE}/l/${drop.token}/file`);
-    expect(fileRes.status).toBe(200);
-    const downloaded = Buffer.from(await fileRes.arrayBuffer());
-    expect(downloaded.equals(original)).toBe(true);
-    expect(fileRes.headers.get("content-disposition")).toContain("attachment");
+describe("token auth", () => {
+  it("missing header → 401 UNAUTHORIZED envelope", async () => {
+    const res = await fetch(`${BASE}/v1/me`);
+    expect(res.status).toBe(401);
+    const body = await json<ApiError>(res);
+    expect(body.error.code).toBe("UNAUTHORIZED");
+    expect(typeof body.error.message).toBe("string");
   });
 
-  it("reply then edit with different real bytes via /l", async () => {
-    const replyRes = await replyOnLink(drop.token, replyText);
-    expect(replyRes.status).toBe(200);
-    const replyBody = (await replyRes.json()) as { status: string };
-    expect(replyBody.status).toBe("answered");
-
-    const editRes = await fetch(`${BASE}/l/${drop.token}/edit`, {
-      method: "POST",
-      headers: { "content-type": "application/octet-stream", "x-filename": "edited-report.bin" },
-      body: edited,
-    });
-    expect(editRes.status).toBe(200);
+  it("malformed header → 401", async () => {
+    const res = await fetch(`${BASE}/v1/me`, { headers: { authorization: "Bearer not-a-token" } });
+    expect(res.status).toBe(401);
+    expect((await json<ApiError>(res)).error.code).toBe("UNAUTHORIZED");
   });
 
-  it("result shows replyText + edit filename; edit download byte-identical", async () => {
-    const resultRes = await fetch(`${BASE}/v1/drops/${drop.dropId}/result`, {
-      headers: { authorization: `Bearer ${keyA}` },
-    });
-    expect(resultRes.status).toBe(200);
-    const result = (await resultRes.json()) as {
-      dropId: string;
-      status: string;
-      replyText?: string;
-      edit?: { filename: string; sizeBytes: number };
-    };
-    expect(result.dropId).toBe(drop.dropId);
-    expect(result.status).toBe("answered");
-    expect(result.replyText).toBe(replyText);
-    expect(result.edit).toEqual({ filename: "edited-report.bin", sizeBytes: edited.length });
+  it("valid but revoked token → 401", async () => {
+    const u = await seedUser(`revoked-${RUN}@postdrop.test`, "Revoked");
+    await revokeToken(u.tokenId);
+    const res = await fetch(`${BASE}/v1/me`, { headers: bearer(u.key) });
+    expect(res.status).toBe(401);
+    expect((await json<ApiError>(res)).error.code).toBe("UNAUTHORIZED");
+  });
 
-    const editDl = await fetch(`${BASE}/v1/drops/${drop.dropId}/edit`, {
-      headers: { authorization: `Bearer ${keyA}` },
-    });
-    expect(editDl.status).toBe(200);
-    const editBytes = Buffer.from(await editDl.arrayBuffer());
-    expect(editBytes.equals(edited)).toBe(true);
+  it("valid token → /v1/me reflects the seeded user", async () => {
+    const res = await fetch(`${BASE}/v1/me`, { headers: bearer(aliceKey) });
+    expect(res.status).toBe(200);
+    const body = await json<{ userId: string; email: string; name: string }>(res);
+    expect(body.userId).toBe(aliceId);
+    expect(body.email).toBe(`alice-${RUN}@postdrop.test`);
+    expect(body.name).toBe("Alice");
   });
 });
 
 // ---------------------------------------------------------------------------
-// B — owner dashboard routes
+// 2 — upload happy paths + storage write verification
 // ---------------------------------------------------------------------------
 
-describe("B: owner dashboard routes", () => {
-  let dropId: string;
-  let linkToken: string;
-  const bytes = randomBytes(4096);
-
-  it("GET /api/drops lists account drops", async () => {
-    const uploaded = await uploadOk(keyA, bytes, {
-      recipientEmail: `recipient-b-${RUN}@postdrop.test`,
-      filename: "dashboard-drop.bin",
+describe("upload happy paths", () => {
+  it("png upload → 201 artifact with persisted metadata, bytes on disk", async () => {
+    const res = await upload(aliceKey, PNG_BYTES, {
+      filename: "pixel.png",
+      contentType: "image/png",
     });
-    dropId = uploaded.dropId;
-    linkToken = uploaded.token;
-
-    const res = await fetch(`${BASE}/api/drops`, { headers: { cookie: session.cookie } });
-    expect(res.status).toBe(200);
-    const body = (await res.json()) as { drops: Array<{ dropId: string }> };
-    expect(body.drops.some((d) => d.dropId === dropId)).toBe(true);
+    expect(res.status).toBe(201);
+    const { artifact } = await json<{ artifact: Artifact }>(res);
+    expect(artifact.artifactId).toMatch(/^art_[0-9a-f]{32}$/);
+    expect(artifact.filename).toBe("pixel.png");
+    expect(artifact.contentType).toBe("image/png");
+    expect(artifact.size).toBe(PNG_BYTES.length);
+    expect(new Date(artifact.createdAt).toString()).not.toBe("Invalid Date");
+    expect(new Date(artifact.updatedAt).toString()).not.toBe("Invalid Date");
+    expect(await storageHasExactBytes(PNG_BYTES)).toBe(true);
   });
 
-  it("DELETE /api/drops/:id purges: content null, purgedAt set, status expired", async () => {
-    const res = await fetch(`${BASE}/api/drops/${dropId}`, {
-      method: "DELETE",
-      headers: { cookie: session.cookie },
-    });
-    expect(res.status).toBe(200);
-
-    const agentRes = await fetch(`${BASE}/v1/drops/${dropId}`, {
-      headers: { authorization: `Bearer ${keyA}` },
-    });
-    expect(agentRes.status).toBe(200);
-    const agentBody = (await agentRes.json()) as { status: string };
-    expect(agentBody.status).toBe("expired");
-
-    // tombstone: purgedAt set, content fields (storageKey) null; filename persists
-    const row = await dropRow(dropId);
-    expect(row?.purgedAt).toBeInstanceOf(Date);
-    expect(row?.storageKey).toBeNull();
-    expect(row?.editFilename).toBeNull();
-
-    const linkRes = await fetch(`${BASE}/l/${linkToken}/file`);
-    expect(linkRes.status).toBe(410);
+  it("pdf upload → 201 with application/pdf", async () => {
+    const bytes = pdfBytes();
+    const res = await upload(aliceKey, bytes, { filename: "doc.pdf", contentType: "application/pdf" });
+    expect(res.status).toBe(201);
+    const { artifact } = await json<{ artifact: Artifact }>(res);
+    expect(artifact.contentType).toBe("application/pdf");
+    expect(artifact.size).toBe(bytes.length);
+    expect(await storageHasExactBytes(bytes)).toBe(true);
   });
 
-  it("GET /api/usage storageBytes matches unpurged uploads", async () => {
-    const res = await fetch(`${BASE}/api/usage`, { headers: { cookie: session.cookie } });
-    expect(res.status).toBe(200);
-    const usage = (await res.json()) as { tier: string; storageBytes: number; capBytes: number };
-    expect(usage.tier).toBe("free");
-    expect(usage.capBytes).toBe(FREE_CAP_BYTES);
-    // Section A's original is the only unpurged drop (B's was purged above;
-    // storageBytes sums original sizeBytes, edits don't add)
-    expect(usage.storageBytes).toBe(A_ORIGINAL_LEN);
+  it("txt upload → 201 with text/plain", async () => {
+    const bytes = txtBytes();
+    const res = await upload(aliceKey, bytes, { filename: "notes.txt", contentType: "text/plain" });
+    expect(res.status).toBe(201);
+    const { artifact } = await json<{ artifact: Artifact }>(res);
+    expect(artifact.contentType).toBe("text/plain");
+    expect(artifact.size).toBe(bytes.length);
+    expect(await storageHasExactBytes(bytes)).toBe(true);
   });
 
-  it("agent revoke → key 401 on next /v1 call", async () => {
-    const key = await createAgent(session, `revoke-me-${RUN}`);
-    const listRes = await fetch(`${BASE}/v1/drops`, {
-      headers: { authorization: `Bearer ${key}` },
-    });
-    expect(listRes.status).toBe(200);
+  it("upload with no auth header → 401", async () => {
+    const res = await fetch(`${BASE}/v1/artifacts`, { method: "POST", body: new FormData() });
+    expect(res.status).toBe(401);
+    expect((await json<ApiError>(res)).error.code).toBe("UNAUTHORIZED");
+  });
 
-    const agentsRes = await fetch(`${BASE}/api/agents`, { headers: { cookie: session.cookie } });
-    const agents = (await agentsRes.json()) as { agents: Array<{ agentId: string; name: string }> };
-    const target = agents.agents.find((a) => a.name === `revoke-me-${RUN}`);
-    expect(target).toBeTruthy();
-    const delRes = await fetch(`${BASE}/api/agents/${target!.agentId}`, {
-      method: "DELETE",
-      headers: { cookie: session.cookie },
-    });
-    expect(delRes.status).toBe(200);
-
-    const afterRes = await fetch(`${BASE}/v1/drops`, {
-      headers: { authorization: `Bearer ${key}` },
-    });
-    expect(afterRes.status).toBe(401);
+  it("unregistered (well-formed) key → 401", async () => {
+    const res = await upload(makeKey(), PNG_BYTES, { filename: "x.png", contentType: "image/png" });
+    // not registered key — same 401 shape
+    expect(res.status).toBe(401);
+    expect((await json<ApiError>(res)).error.code).toBe("UNAUTHORIZED");
   });
 });
 
 // ---------------------------------------------------------------------------
-// C — clients e2e (CLI + MCP dists against the running server)
+// 3 — format rejection
 // ---------------------------------------------------------------------------
 
-describe("C: clients e2e", () => {
-  it("CLI drop uploads and prints link URL; check shows reply", async () => {
-    const bytes = randomBytes(33_333);
-    const tmpFile = await writeTempFile("cli-payload.bin", bytes);
-
-    const dropped = await cli(["drop", tmpFile, "--to", `cli-recipient-${RUN}@postdrop.test`], keyA);
-    expect(dropped.code).toBe(0);
-    const linkMatch = dropped.stdout.match(new RegExp(`${BASE}/l/([0-9a-f]{64})`));
-    expect(linkMatch).toBeTruthy();
-    const token = linkMatch![1];
-
-    const dl = await fetch(`${BASE}/l/${token}/file`);
-    expect(dl.status).toBe(200);
-    expect(Buffer.from(await dl.arrayBuffer()).equals(bytes)).toBe(true);
-
-    const cliDropId = await findDropIdByFilename(keyA, "cli-payload.bin");
-    expect(cliDropId).toBeTruthy();
-
-    const replyRes = await replyOnLink(token, `cli reply ${RUN}`);
-    expect(replyRes.status).toBe(200);
-    const checked = await cli(["check", cliDropId!], keyA);
-    expect(checked.code).toBe(0);
-    expect(checked.stdout).toContain("status: answered");
-    expect(checked.stdout).toContain(`cli reply ${RUN}`);
-  }, 120_000);
-
-  it("MCP postdrop_send + postdrop_check over stdio", async () => {
-    const bytes = randomBytes(9_876);
-    const tmpFile = await writeTempFile("mcp-payload.bin", bytes);
-
-    const { client, transport } = await mcpSpawn(keyA);
-    try {
-      const sendRes = (await client.callTool({
-        name: "postdrop_send",
-        arguments: { file_path: tmpFile, recipient_email: `mcp-recipient-${RUN}@postdrop.test` },
-      })) as { content?: Array<{ type: string; text?: string }>; isError?: boolean };
-      expect(sendRes.isError).toBeFalsy();
-      const sendText = sendRes.content?.[0]?.text ?? "";
-      const dropIdMatch = sendText.match(/drop_[0-9a-f]{32}/);
-      const tokenMatch = sendText.match(new RegExp(`${BASE}/l/([0-9a-f]{64})`));
-      expect(dropIdMatch).toBeTruthy();
-      expect(tokenMatch).toBeTruthy();
-
-      const dl = await fetch(`${BASE}/l/${tokenMatch![1]}/file`);
-      expect(dl.status).toBe(200);
-      expect(Buffer.from(await dl.arrayBuffer()).equals(bytes)).toBe(true);
-
-      const replyRes = await replyOnLink(tokenMatch![1], `mcp reply ${RUN}`);
-      expect(replyRes.status).toBe(200);
-      const checkRes = (await client.callTool({
-        name: "postdrop_check",
-        arguments: { drop_id: dropIdMatch![0] },
-      })) as { content?: Array<{ type: string; text?: string }>; isError?: boolean };
-      expect(checkRes.isError).toBeFalsy();
-      const checkText = checkRes.content?.[0]?.text ?? "";
-      expect(checkText).toContain("answered");
-      expect(checkText).toContain(`mcp reply ${RUN}`);
-    } finally {
-      await client.close();
-      await transport.close();
+describe("format rejection", () => {
+  it(".docx → 422 UNSUPPORTED_FORMAT listing allowed formats", async () => {
+    const res = await upload(aliceKey, DOCX_BYTES, {
+      filename: "paper.docx",
+      contentType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    });
+    expect(res.status).toBe(422);
+    const body = await json<ApiError>(res);
+    expect(body.error.code).toBe("UNSUPPORTED_FORMAT");
+    for (const ext of ["png", "jpg", "jpeg", "gif", "webp", "avif", "svg", "pdf", "mp4", "webm", "mp3", "wav", "ogg", "txt", "md", "html", "json", "csv", "xml"]) {
+      expect(body.error.message).toContain(ext);
     }
-  }, 120_000);
+  });
+
+  it("extensionless filename → 422 UNSUPPORTED_FORMAT", async () => {
+    const res = await upload(aliceKey, txtBytes(32), {
+      filename: "README",
+      contentType: "text/plain",
+    });
+    expect(res.status).toBe(422);
+    expect((await json<ApiError>(res)).error.code).toBe("UNSUPPORTED_FORMAT");
+  });
 });
 
 // ---------------------------------------------------------------------------
-// D — negative: scoping, unknown links, expiry/revoke purge
+// 4 — size rejection (MAX_ARTIFACT_BYTES tiny via boot env)
 // ---------------------------------------------------------------------------
 
-describe("D: negative cases", () => {
-  let dropId: string;
-  let token: string;
+describe("size rejection", () => {
+  let sizeKey: string;
+  beforeAll(async () => {
+    sizeKey = (await newUser("sizer")).key;
+  });
+
+  it(`file > ${MAX_ARTIFACT_BYTES} bytes → 413 FILE_TOO_LARGE`, async () => {
+    expect(oversizedBytes().length).toBeGreaterThan(MAX_ARTIFACT_BYTES);
+    const res = await upload(sizeKey, oversizedBytes(), {
+      filename: "big.txt",
+      contentType: "text/plain",
+    });
+    expect(res.status).toBe(413);
+    const body = await json<ApiError>(res);
+    expect(body.error.code).toBe("FILE_TOO_LARGE");
+  });
+
+  it("file exactly at the limit is not size-rejected", async () => {
+    const bytes = txtBytes(MAX_ARTIFACT_BYTES);
+    expect(bytes.length).toBe(MAX_ARTIFACT_BYTES);
+    const res = await upload(sizeKey, bytes, { filename: "edge.txt", contentType: "text/plain" });
+    expect(res.status).toBe(201);
+    expect((await json<{ artifact: Artifact }>(res)).artifact.size).toBe(MAX_ARTIFACT_BYTES);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 5 — quota (QUOTA_BYTES seeded small via boot env; dedicated user)
+// ---------------------------------------------------------------------------
+
+describe("quota", () => {
+  let quotaKey: string;
 
   beforeAll(async () => {
-    const drop = await uploadOk(keyA, randomBytes(2048), {
-      recipientEmail: `neg-recipient-${RUN}@postdrop.test`,
-      filename: "neg-case.bin",
-    });
-    dropId = drop.dropId;
-    token = drop.token;
+    const u = await seedUser(`quota-${RUN}@postdrop.test`, "Quota");
+    quotaKey = u.key;
   });
 
-  it("agent B gets 404 for agent A's drop (never 403)", async () => {
-    for (const p of [`/v1/drops/${dropId}`, `/v1/drops/${dropId}/result`, `/v1/drops/${dropId}/edit`]) {
-      const res = await fetch(`${BASE}${p}`, { headers: { authorization: `Bearer ${keyB}` } });
-      expect(res.status).toBe(404);
+  it("second upload crossing QUOTA_BYTES → 422 QUOTA_EXCEEDED", async () => {
+    expect(QUOTA_BYTES).toBeLessThan(MAX_ARTIFACT_BYTES * 2);
+    const first = txtBytes(2400);
+    const r1 = await upload(quotaKey, first, { filename: "q1.txt", contentType: "text/plain" });
+    expect(r1.status).toBe(201);
+
+    const second = txtBytes(2400); // 2400 + 2400 > 4096, each under the per-file cap
+    const r2 = await upload(quotaKey, second, { filename: "q2.txt", contentType: "text/plain" });
+    expect(r2.status).toBe(422);
+    expect((await json<ApiError>(r2)).error.code).toBe("QUOTA_EXCEEDED");
+  });
+
+  it("deleting the artifact frees quota → upload OK again", async () => {
+    const list = await json<{ items: Artifact[] }>(
+      await fetch(`${BASE}/v1/artifacts`, { headers: bearer(quotaKey) }),
+    );
+    expect(list.items).toHaveLength(1);
+    const del = await fetch(`${BASE}/v1/artifacts/${list.items[0].artifactId}`, {
+      method: "DELETE",
+      headers: bearer(quotaKey),
+    });
+    expect(del.status).toBe(204);
+
+    const retry = txtBytes(2400);
+    const res = await upload(quotaKey, retry, { filename: "q3.txt", contentType: "text/plain" });
+    expect(res.status).toBe(201);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 6 — edit (PATCH replace-in-place)
+// ---------------------------------------------------------------------------
+
+describe("artifact edit (PATCH)", () => {
+  it("replaces bytes, keeps artifactId, updates metadata and storage", async () => {
+    const originalBytes = Buffer.concat([PNG_BYTES, randomBytes(8)]); // unique per run
+    const created = await json<{ artifact: Artifact }>(
+      await upload(aliceKey, originalBytes, { filename: "evolving.png", contentType: "image/png" }),
+    );
+    const original = created.artifact;
+
+    const replacement = pngBytesAlt();
+    const res = await patchArtifact(aliceKey, original.artifactId, replacement, {
+      filename: "evolving.png",
+      contentType: "image/png",
+    });
+    expect(res.status).toBe(200);
+    const { artifact } = await json<{ artifact: Artifact }>(res);
+    expect(artifact.artifactId).toBe(original.artifactId);
+    expect(artifact.size).toBe(replacement.length);
+    expect(new Date(artifact.updatedAt).getTime()).toBeGreaterThanOrEqual(
+      new Date(original.updatedAt).getTime(),
+    );
+
+    // old storage object replaced: exactly the new bytes exist, old full bytes gone
+    expect(await storageHasExactBytes(replacement)).toBe(true);
+    expect(await storageHasExactBytes(originalBytes)).toBe(false);
+  });
+
+  it("PATCH updates contentType (png → pdf)", async () => {
+    const created = await json<{ artifact: Artifact }>(
+      await upload(aliceKey, PNG_BYTES, { filename: "swap.png", contentType: "image/png" }),
+    );
+    const bytes = pdfBytes();
+    const res = await patchArtifact(aliceKey, created.artifact.artifactId, bytes, {
+      filename: "swap.pdf",
+      contentType: "application/pdf",
+    });
+    expect(res.status).toBe(200);
+    const { artifact } = await json<{ artifact: Artifact }>(res);
+    expect(artifact.artifactId).toBe(created.artifact.artifactId);
+    expect(artifact.contentType).toBe("application/pdf");
+    expect(artifact.size).toBe(bytes.length);
+    expect(await storageHasExactBytes(bytes)).toBe(true);
+  });
+
+  it("PATCH foreign artifact → 404", async () => {
+    const mine = await json<{ artifact: Artifact }>(
+      await upload(aliceKey, PNG_BYTES, { filename: "mine.png", contentType: "image/png" }),
+    );
+    const res = await patchArtifact(bobKey, mine.artifact.artifactId, PNG_BYTES, {
+      filename: "mine.png",
+      contentType: "image/png",
+    });
+    expect(res.status).toBe(404);
+    expect((await json<ApiError>(res)).error.code).toBe("NOT_FOUND");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 7 — list + pagination + visibility scoping
+// ---------------------------------------------------------------------------
+
+describe("list artifacts", () => {
+  const prefix = `list-${RUN}`;
+
+  beforeAll(async () => {
+    const u = await seedUser(`lister-${RUN}@postdrop.test`, "Lister");
+    for (let i = 0; i < 5; i++) {
+      const res = await upload(u.key, txtBytes(16 + i), {
+        filename: `${prefix}-${i}.txt`,
+        contentType: "text/plain",
+      });
+      expect(res.status).toBe(201);
     }
+  });
+
+  it("paginates with cursor round-trip until exhausted", async () => {
+    const u = await seedUser(`paginator-${RUN}@postdrop.test`, "Paginator");
+    for (let i = 0; i < 3; i++) {
+      await upload(u.key, txtBytes(20 + i), { filename: `p-${i}.txt`, contentType: "text/plain" });
+    }
+
+    const seen: Artifact[] = [];
+    let cursor: string | undefined;
+    for (let page = 0; page < 10; page++) {
+      const url = new URL(`${BASE}/v1/artifacts`);
+      url.searchParams.set("limit", "2");
+      if (cursor) url.searchParams.set("cursor", cursor);
+      const res = await fetch(url, { headers: bearer(u.key) });
+      expect(res.status).toBe(200);
+      const body = await json<{ items: Artifact[]; nextCursor: string | null }>(res);
+      seen.push(...body.items);
+      if (body.nextCursor === null) break;
+      cursor = body.nextCursor;
+    }
+    expect(seen).toHaveLength(3);
+    expect(seen.map((a) => a.filename)).toEqual(
+      expect.arrayContaining([expect.stringContaining("p-")]),
+    );
+    // cursors never repeat an artifact
+    const ids = new Set(seen.map((a) => a.artifactId));
+    expect(ids.size).toBe(seen.length);
+  });
+
+  it("only own artifacts visible to the token", async () => {
+    const mine = await json<{ artifact: Artifact }>(
+      await upload(aliceKey, PNG_BYTES, { filename: `${prefix}-mine.png`, contentType: "image/png" }),
+    );
+    const bobList = await json<{ items: Artifact[] }>(
+      await fetch(`${BASE}/v1/artifacts`, { headers: bearer(bobKey) }),
+    );
+    expect(bobList.items.map((a) => a.artifactId)).not.toContain(mine.artifact.artifactId);
+    const aliceList = await json<{ items: Artifact[] }>(
+      await fetch(`${BASE}/v1/artifacts`, { headers: bearer(aliceKey) }),
+    );
+    expect(aliceList.items.map((a) => a.artifactId)).toContain(mine.artifact.artifactId);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 8 — ownership (no existence leak)
+// ---------------------------------------------------------------------------
+
+describe("ownership scoping", () => {
+  let artifactId: string;
+
+  beforeAll(async () => {
+    const created = await json<{ artifact: Artifact }>(
+      await upload(aliceKey, PNG_BYTES, { filename: "owned.png", contentType: "image/png" }),
+    );
+    artifactId = created.artifact.artifactId;
+  });
+
+  it("foreign GET → 404 NOT_FOUND", async () => {
+    const res = await fetch(`${BASE}/v1/artifacts/${artifactId}`, { headers: bearer(bobKey) });
+    expect(res.status).toBe(404);
+    expect((await json<ApiError>(res)).error.code).toBe("NOT_FOUND");
+  });
+
+  it("foreign PATCH → 404", async () => {
+    const res = await patchArtifact(bobKey, artifactId, PNG_BYTES, {
+      filename: "owned.png",
+      contentType: "image/png",
+    });
+    expect(res.status).toBe(404);
+  });
+
+  it("foreign DELETE → 404", async () => {
+    const res = await fetch(`${BASE}/v1/artifacts/${artifactId}`, {
+      method: "DELETE",
+      headers: bearer(bobKey),
+    });
+    expect(res.status).toBe(404);
+  });
+
+  it("unknown artifact id → 404", async () => {
+    const res = await fetch(`${BASE}/v1/artifacts/${randomUUID()}`, { headers: bearer(aliceKey) });
+    expect(res.status).toBe(404);
+  });
+
+  it("owner GET → 200 with artifact", async () => {
+    const res = await fetch(`${BASE}/v1/artifacts/${artifactId}`, { headers: bearer(aliceKey) });
+    expect(res.status).toBe(200);
+    const body = await json<{ artifact: Artifact }>(res);
+    expect(body.artifact.artifactId).toBe(artifactId);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 9 — share lifecycle + public link surface
+// ---------------------------------------------------------------------------
+
+describe("share lifecycle", () => {
+  let artifactId: string;
+
+  beforeAll(async () => {
+    const created = await json<{ artifact: Artifact }>(
+      await upload(aliceKey, PNG_BYTES, { filename: "shared.png", contentType: "image/png" }),
+    );
+    artifactId = created.artifact.artifactId;
+  });
+
+  it("create without expiry → 201 shareLink on BASE/a/<token>", async () => {
+    const res = await createShare(aliceKey, artifactId);
+    expect(res.status).toBe(201);
+    const { shareLink } = await json<{ shareLink: ShareLink }>(res);
+    expect(shareLink.linkId).toBeTruthy();
+    expect(shareLink.revokedAt).toBeNull();
+    expect(shareLink.expiresAt).toBeNull();
+    const token = shareLink.url.replace(`${BASE}/a/`, "");
+    expect(shareLink.url).toBe(`${BASE}/a/${token}`);
+    expect(token.length).toBeGreaterThan(8);
+
+    // artifact detail lists the link
+    const detail = await json<{ artifact: Artifact; shareLinks: ShareLink[] }>(
+      await fetch(`${BASE}/v1/artifacts/${artifactId}`, { headers: bearer(aliceKey) }),
+    );
+    expect(detail.shareLinks.map((l) => l.linkId)).toContain(shareLink.linkId);
+  });
+
+  it("create with future expiry → 201 with expiresAt set", async () => {
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+    const res = await createShare(aliceKey, artifactId, { expiresAt });
+    expect(res.status).toBe(201);
+    const { shareLink } = await json<{ shareLink: ShareLink }>(res);
+    expect(shareLink.expiresAt).toBe(expiresAt);
+  });
+
+  it("viewer page 200, raw serves exact bytes with correct content type", async () => {
+    const { shareLink } = await json<{ shareLink: ShareLink }>(
+      await createShare(aliceKey, artifactId),
+    );
+    const viewer = await fetch(shareLink.url);
+    expect(viewer.status).toBe(200);
+    expect(viewer.headers.get("content-type")).toContain("text/html");
+
+    const raw = await fetch(`${shareLink.url}/raw`);
+    expect(raw.status).toBe(200);
+    expect(Buffer.from(await raw.arrayBuffer()).equals(PNG_BYTES)).toBe(true);
+    expect(raw.headers.get("content-type")).toContain("image/png");
+  });
+
+  it("unshare (DELETE /v1/share/:linkId) → 204 then viewer+raw 404", async () => {
+    const { shareLink } = await json<{ shareLink: ShareLink }>(
+      await createShare(aliceKey, artifactId),
+    );
+    const del = await fetch(`${BASE}/v1/share/${shareLink.linkId}`, {
+      method: "DELETE",
+      headers: bearer(aliceKey),
+    });
+    expect(del.status).toBe(204);
+    expect((await fetch(shareLink.url)).status).toBe(404);
+    expect((await fetch(`${shareLink.url}/raw`)).status).toBe(404);
+  });
+
+  it("expired link (expiresAt in past, seeded directly) → viewer+raw 404", async () => {
+    const { shareLink } = await json<{ shareLink: ShareLink }>(
+      await createShare(aliceKey, artifactId),
+    );
+    // SWEEPER_DISABLED=1, so expiry is seeded at the driver level.
+    const filter = { linkId: shareLink.linkId };
+    const update = { $set: { expiresAt: new Date(Date.now() - 1000) } };
+    await collection("share_links").updateOne(filter, update);
+    expect((await fetch(shareLink.url)).status).toBe(404);
+    expect((await fetch(`${shareLink.url}/raw`)).status).toBe(404);
   });
 
   it("unknown link token → 404", async () => {
-    const unknown = randomBytes(32).toString("hex");
-    expect((await fetch(`${BASE}/l/${unknown}/meta`)).status).toBe(404);
-    expect((await fetch(`${BASE}/l/${unknown}/file`)).status).toBe(404);
+    expect((await fetch(`${BASE}/a/definitely-not-a-real-token`)).status).toBe(404);
+    expect((await fetch(`${BASE}/a/definitely-not-a-real-token/raw`)).status).toBe(404);
   });
 
-  it("revoke expires + purges; link 410; content purged; result reflects it", async () => {
-    const res = await revoke(keyA, dropId);
+  it("foreign share create → 404", async () => {
+    const res = await createShare(bobKey, artifactId);
+    expect(res.status).toBe(404);
+  });
+
+  it("deleting the artifact makes its links 404", async () => {
+    const created = await json<{ artifact: Artifact }>(
+      await upload(aliceKey, PNG_BYTES, { filename: "doomed.png", contentType: "image/png" }),
+    );
+    const { shareLink } = await json<{ shareLink: ShareLink }>(
+      await createShare(aliceKey, created.artifact.artifactId),
+    );
+    expect((await fetch(shareLink.url)).status).toBe(200);
+    const del = await fetch(`${BASE}/v1/artifacts/${created.artifact.artifactId}`, {
+      method: "DELETE",
+      headers: bearer(aliceKey),
+    });
+    expect(del.status).toBe(204);
+    expect((await fetch(shareLink.url)).status).toBe(404);
+    expect((await fetch(`${shareLink.url}/raw`)).status).toBe(404);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 10 — share listing + deletion scoping (13 covered too)
+// ---------------------------------------------------------------------------
+
+describe("share admin surface", () => {
+  it("GET /v1/share lists own links; DELETE foreign link → 404", async () => {
+    const created = await json<{ artifact: Artifact }>(
+      await upload(aliceKey, PNG_BYTES, { filename: "admin.png", contentType: "image/png" }),
+    );
+    const mine = await json<{ shareLink: ShareLink }>(
+      await createShare(aliceKey, created.artifact.artifactId),
+    );
+
+    const list = await json<{ items: ShareLink[] }>(
+      await fetch(`${BASE}/v1/share`, { headers: bearer(aliceKey) }),
+    );
+    expect(Array.isArray(list.items)).toBe(true);
+    expect(list.items.map((l) => l.linkId)).toContain(mine.shareLink.linkId);
+
+    // foreign user sees none of it and cannot delete it
+    const bobList = await json<{ items: ShareLink[] }>(
+      await fetch(`${BASE}/v1/share`, { headers: bearer(bobKey) }),
+    );
+    expect(bobList.items.map((l) => l.linkId)).not.toContain(mine.shareLink.linkId);
+
+    const foreignDel = await fetch(`${BASE}/v1/share/${mine.shareLink.linkId}`, {
+      method: "DELETE",
+      headers: bearer(bobKey),
+    });
+    expect(foreignDel.status).toBe(404);
+    expect((await json<ApiError>(foreignDel)).error.code).toBe("NOT_FOUND");
+
+    // own delete still works
+    const ownDel = await fetch(`${BASE}/v1/share/${mine.shareLink.linkId}`, {
+      method: "DELETE",
+      headers: bearer(aliceKey),
+    });
+    expect(ownDel.status).toBe(204);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 11 — sandboxed active content + raw download (CLI surface)
+// ---------------------------------------------------------------------------
+
+describe("active content sandboxing and raw download", () => {
+  async function shareOf(
+    key: string,
+    bytes: Buffer,
+    filename: string,
+    contentType: string,
+  ): Promise<{ url: string; artifactId: string }> {
+    const created = await json<{ artifact: Artifact }>(
+      await upload(key, bytes, { filename, contentType }),
+    );
+    const { shareLink } = await json<{ shareLink: ShareLink }>(
+      await createShare(key, created.artifact.artifactId),
+    );
+    return { url: shareLink.url, artifactId: created.artifact.artifactId };
+  }
+
+  it("html raw carries Content-Security-Policy: sandbox and text/html", async () => {
+    const { url } = await shareOf(aliceKey, HTML_BYTES, "report.html", "text/html");
+    const raw = await fetch(`${url}/raw`);
+    expect(raw.status).toBe(200);
+    expect(raw.headers.get("content-type")).toContain("text/html");
+    expect(raw.headers.get("content-security-policy")).toContain("sandbox");
+  });
+
+  it("svg raw carries Content-Security-Policy: sandbox and image/svg+xml", async () => {
+    const { url } = await shareOf(aliceKey, SVG_BYTES, "chart.svg", "image/svg+xml");
+    const raw = await fetch(`${url}/raw`);
+    expect(raw.status).toBe(200);
+    expect(raw.headers.get("content-type")).toContain("image/svg+xml");
+    expect(raw.headers.get("content-security-policy")).toContain("sandbox");
+  });
+
+  it("png raw does not need sandbox and is inline", async () => {
+    const { url } = await shareOf(aliceKey, PNG_BYTES, "safe.png", "image/png");
+    const raw = await fetch(`${url}/raw`);
+    expect(raw.status).toBe(200);
+    expect(raw.headers.get("content-type")).toContain("image/png");
+    const csp = raw.headers.get("content-security-policy");
+    expect(csp === null || !csp.includes("sandbox")).toBe(true);
+    expect(raw.headers.get("content-disposition") ?? "inline").toContain("inline");
+  });
+
+  it("token-auth raw download (CLI surface) → 200 exact bytes inline", async () => {
+    const created = await json<{ artifact: Artifact }>(
+      await upload(aliceKey, pdfBytes(), { filename: "cli.pdf", contentType: "application/pdf" }),
+    );
+    const res = await fetch(`${BASE}/v1/artifacts/${created.artifact.artifactId}/raw`, {
+      headers: bearer(aliceKey),
+    });
     expect(res.status).toBe(200);
-    const revBody = (await res.json()) as { status: string };
-    expect(revBody.status).toBe("expired");
-
-    const summaryRes = await fetch(`${BASE}/v1/drops/${dropId}`, {
-      headers: { authorization: `Bearer ${keyA}` },
-    });
-    expect(summaryRes.status).toBe(200);
-    const summary = (await summaryRes.json()) as { status: string };
-    expect(summary.status).toBe("expired");
-
-    expect((await fetch(`${BASE}/l/${token}/file`)).status).toBe(410);
-    expect((await fetch(`${BASE}/l/${token}/meta`)).status).toBe(410);
-
-    const resultRes = await fetch(`${BASE}/v1/drops/${dropId}/result`, {
-      headers: { authorization: `Bearer ${keyA}` },
-    });
-    expect(resultRes.status).toBe(200);
-    const result = (await resultRes.json()) as { status: string; replyText?: string; edit?: unknown };
-    expect(result.status).toBe("expired");
-    expect(result.replyText).toBeUndefined();
-    expect(result.edit).toBeUndefined();
-
-    const row = await dropRow(dropId);
-    expect(row?.purgedAt).toBeInstanceOf(Date);
-    expect(row?.storageKey).toBeNull();
+    expect(res.headers.get("content-type")).toContain("application/pdf");
+    expect((res.headers.get("content-disposition") ?? "inline")).toContain("inline");
   });
 
-  it("directly-expired row (inserted via Mongo) → 410 + purge-on-access removes storage", async () => {
-    const expiredToken = randomBytes(32).toString("hex");
-    const expiredDropId = `drop_${randomBytes(16).toString("hex")}`;
-
-    if (!mongoose.connection.readyState) await mongoose.connect(info.mongoUri);
-    let storageDirPath: string;
-    try {
-      const db = mongoose.connection.db!;
-      const account = await db.collection("accounts").findOne({});
-      const agent = await db.collection("agents").findOne({ name: `acceptance-a-${RUN}` });
-      expect(account && agent).toBeTruthy();
-      await db.collection("drops").insertOne({
-        dropId: expiredDropId,
-        accountId: account!._id,
-        agentId: agent!.agentId,
-        recipientEmail: `expired-${RUN}@postdrop.test`,
-        filename: "already-expired.bin",
-        sizeBytes: 512,
-        mimeType: "application/octet-stream",
-        storageKey: `drops/${expiredDropId}/original-already-expired.bin`,
-        status: "pending",
-        linkTokenHash: createHash("sha256").update(expiredToken).digest("hex"),
-        expiresAt: new Date(Date.now() - 3_600_000),
-        createdAt: new Date(Date.now() - 7_200_000),
-      });
-      // materialize the storage object so purge-on-access must delete it
-      const dirents = await import("node:fs/promises").then((f) =>
-        f.readdir(tmpdir(), { withFileTypes: true }),
-      );
-      const storageDir = dirents.find(
-        (d) => d.isDirectory() && d.name.startsWith("postdrop-storage-"),
-      );
-      expect(storageDir).toBeTruthy();
-      storageDirPath = path.join(tmpdir(), storageDir!.name);
-      const keyPath = path.join(storageDirPath, "drops", expiredDropId);
-      await mkdir(keyPath, { recursive: true });
-      await writeFile(path.join(keyPath, "original-already-expired.bin"), Buffer.alloc(512));
-    } finally {
-      // keep the shared mongoose connection open for further reads
-    }
-
-    const fileRes = await fetch(`${BASE}/l/${expiredToken}/file`);
-    expect(fileRes.status).toBe(410);
-
-    const row = await dropRow(expiredDropId);
-    expect(row?.purgedAt).toBeInstanceOf(Date);
-    expect(row?.storageKey).toBeNull();
+  it("token-auth raw download of foreign artifact → 404", async () => {
+    const created = await json<{ artifact: Artifact }>(
+      await upload(aliceKey, PNG_BYTES, { filename: "nope.png", contentType: "image/png" }),
+    );
+    const res = await fetch(`${BASE}/v1/artifacts/${created.artifact.artifactId}/raw`, {
+      headers: bearer(bobKey),
+    });
+    expect(res.status).toBe(404);
   });
 });
 
 // ---------------------------------------------------------------------------
-// F — quota
+// 12 — presign on disk driver
 // ---------------------------------------------------------------------------
 
-describe("F: quota", () => {
-  it("near-cap upload then 1-byte upload → 403 QUOTA_EXCEEDED; >1GB content-length → 413", async () => {
-    // fill the account exactly to the free cap (any prior unpurged byte counts)
-    const usageBefore = await fetch(`${BASE}/api/usage`, { headers: { cookie: session.cookie } });
-    const usageBody = (await usageBefore.json()) as { storageBytes: number };
-    const fillBytes = FREE_CAP_BYTES - usageBody.storageBytes;
-    const big = Buffer.alloc(fillBytes, 0x61);
-    const bigRes = await upload(keyA, big, {
-      recipientEmail: `quota-recipient-${RUN}@postdrop.test`,
-      filename: "cap-filler.bin",
+describe("presign", () => {
+  it("POST /v1/uploads/presign on disk driver → 501 PRESIGN_UNAVAILABLE", async () => {
+    const res = await fetch(`${BASE}/v1/uploads/presign`, {
+      method: "POST",
+      headers: { ...bearer(aliceKey), "content-type": "application/json" },
+      body: JSON.stringify({
+        filename: "big.png",
+        contentType: "image/png",
+        size: PNG_BYTES.length,
+      }),
     });
-    expect(bigRes.status).toBe(201);
-    const bigBody = (await bigRes.json()) as { dropId: string };
+    expect(res.status).toBe(501);
+    expect((await json<ApiError>(res)).error.code).toBe("PRESIGN_UNAVAILABLE");
+  });
 
-    const oneByte = await upload(keyA, Buffer.alloc(1, 0x62), {
-      recipientEmail: `quota-recipient-${RUN}@postdrop.test`,
-      filename: "one-byte.bin",
+  it("presign without auth → 401", async () => {
+    const res = await fetch(`${BASE}/v1/uploads/presign`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ filename: "big.png", contentType: "image/png", size: 10 }),
     });
-    expect(oneByte.status).toBe(403);
-    const errBody = (await oneByte.json()) as { error: { code: string } };
-    expect(errBody.error.code).toBe("QUOTA_EXCEEDED");
-
-    // per-file limit is enforced from the declared content-length; only a tiny
-    // body is sent so the test stays fast
-    const raw = await rawUploadWithDeclaredLength(keyA, 1_073_741_825, 1024);
-    expect(raw.status).toBe(413);
-
-    // free the cap (purged drops no longer count toward storage)
-    const rev = await revoke(keyA, bigBody.dropId);
-    expect(rev.status).toBe(200);
-    const usageAfter = await fetch(`${BASE}/api/usage`, { headers: { cookie: session.cookie } });
-    const usageAfterBody = (await usageAfter.json()) as { storageBytes: number };
-    expect(usageAfterBody.storageBytes).toBeLessThan(FREE_CAP_BYTES);
-  }, 120_000);
+    expect(res.status).toBe(401);
+  });
 });
 
 // ---------------------------------------------------------------------------
-// Login failure
+// 13 — secret paste regression (UNTOUCHED by the pivot)
 // ---------------------------------------------------------------------------
 
-describe("auth", () => {
-  it("wrong password → 401", async () => {
-    const { res } = await login(info.ownerEmail, `wrong-${RUN}`);
-    expect(res.status).toBe(401);
-  });
+describe("secret link tool regression (/s)", () => {
+  it("create → one view → second view gone", async () => {
+    const iv = "AAAAAAAAAAAAAAAAAAAAAA==";
+    const ciphertext = Buffer.from("top secret text").toString("base64");
+    const createRes = await fetch(`${BASE}/api/pastes`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ kind: "text", iv, ciphertext, ttlHours: 24 }),
+    });
+    expect(createRes.status).toBe(200);
+    const { token } = (await createRes.json()) as { token: string };
+    expect(token).toMatch(/^[0-9a-f]{64}$/);
 
-  it("unknown email → 401", async () => {
-    const { res } = await login(`nobody-${RUN}@postdrop.test`, "irrelevant");
-    expect(res.status).toBe(401);
+    const view1 = await fetch(`${BASE}/api/pastes/${token}`);
+    expect(view1.status).toBe(200);
+    expect(((await view1.json()) as { ciphertext: string }).ciphertext).toBe(ciphertext);
+
+    const view2 = await fetch(`${BASE}/api/pastes/${token}`);
+    expect(view2.status).toBe(410);
+    expect(((await view2.json()) as { gone: boolean }).gone).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Storage hygiene — runs last: uploads must map to stored objects
+// ---------------------------------------------------------------------------
+
+describe("storage hygiene", () => {
+  it("disk storage contains at least one object per surviving artifact", async () => {
+    const count = await storageFileCount();
+    const list = await json<{ items: Artifact[] }>(
+      await fetch(`${BASE}/v1/artifacts`, { headers: bearer(aliceKey) }),
+    );
+    expect(count).toBeGreaterThanOrEqual(list.items.length);
   });
 });

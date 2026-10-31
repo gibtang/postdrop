@@ -4,6 +4,7 @@ import path from "node:path";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import type { ReadableStream as NodeWebReadableStream } from "node:stream/web";
+import { mimeForFilename } from "../formats";
 
 const root = () => {
   const dir = process.env.DISK_STORAGE_PATH;
@@ -43,5 +44,20 @@ export const diskStorage = {
     await unlink(keyPath(key)).catch((err: NodeJS.ErrnoException) => {
       if (err.code !== "ENOENT") throw err;
     });
+  },
+
+  async head(key: string): Promise<{ size: number; contentType: string } | null> {
+    try {
+      const { size } = await stat(keyPath(key));
+      const base = key.split("/").pop() ?? "";
+      return { size, contentType: mimeForFilename(base) ?? "application/octet-stream" };
+    } catch (err: unknown) {
+      if (err instanceof Error && "code" in err && err.code === "ENOENT") return null;
+      throw err;
+    }
+  },
+
+  async presignPut(): Promise<{ url: string }> {
+    throw new Error("presignPut requires STORAGE_DRIVER=s3");
   },
 };
