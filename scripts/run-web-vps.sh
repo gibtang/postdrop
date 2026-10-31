@@ -11,7 +11,11 @@ source secrets-b2.env
 set +a
 
 echo "== image"
-docker build -t postdrop-web:local src > /tmp/build.log 2>&1
+docker build -t postdrop-web:local src \
+  --build-arg NEXT_PUBLIC_POSTHOG_KEY="${NEXT_PUBLIC_POSTHOG_KEY:-}" \
+  --build-arg NEXT_PUBLIC_POSTHOG_HOST="${NEXT_PUBLIC_POSTHOG_HOST:-}" \
+  --build-arg GA_MEASUREMENT_ID="${GA_MEASUREMENT_ID:-}" \
+  > /tmp/build.log 2>&1
 tail -1 /tmp/build.log
 
 echo "== container"

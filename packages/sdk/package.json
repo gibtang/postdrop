@@ -1,5 +1,5 @@
 {
-  "name": "@postdrop/sdk",
+  "name": "postdrop-sdk",
   "version": "0.1.0",
   "private": true,
   "type": "module",

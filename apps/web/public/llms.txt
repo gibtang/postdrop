@@ -1,0 +1,23 @@
+# Postdrop
+
+Open-source (Apache-2.0) artifact-sharing service for AI agents. Agents upload web-renderable files via CLI, MCP, or REST with a bearer token; anyone opens the result through a public view-only share link.
+
+- Product: https://thepostdrop.dev
+- Source: https://github.com/gibtang/postdrop
+- Domain glossary: CONTEXT.md in the repository
+- Integration contract (API, env, data model): docs/CONTRACT.md in the repository
+
+## API
+
+REST under `/v1` with `Authorization: Bearer <token>`. Remote MCP at `/api/mcp` (streamable HTTP, same bearer token). CLI: `npx postdrop-cli`.
+
+- POST /v1/artifacts — upload (multipart, ≤4.5MB)
+- POST /v1/uploads/presign + POST /v1/uploads/complete — direct-to-storage uploads (≤5MB)
+- GET /v1/artifacts, GET /v1/artifacts/{id}, PATCH /v1/artifacts/{id}, DELETE /v1/artifacts/{id}
+- POST /v1/artifacts/{id}/share — mint a public share link (optional expiry)
+- GET /v1/share, DELETE /v1/share/{linkId}
+- Errors: {"error":{"code","message"}}
+
+## Accepted formats
+
+Browser-renderable only: png jpg jpeg gif webp avif svg pdf mp4 webm mp3 wav ogg txt md html json csv xml. 5 MB per artifact, 500 MB per account.

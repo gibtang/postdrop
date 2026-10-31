@@ -1,13 +1,14 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import { Toaster } from "sonner";
-import "./globals.css";
+import { Analytics } from "./analytics";
+
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 
 export const metadata: Metadata = {
   title: "Postdrop",
-  description: "Agent-to-human file handoff",
+  description: "Share web-renderable artifacts from your agents — public links, no login needed",
 };
 
 export default function RootLayout({
@@ -15,11 +16,23 @@ export default function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
+  const gaId = process.env.GA_MEASUREMENT_ID;
   return (
     <html lang="en" className={inter.variable}>
       <body className="min-h-screen">
         {children}
         <Toaster position="top-right" richColors />
+        <Analytics />
+        {gaId && (
+          <>
+            <script async src={`https://www.googletagmanager.com/gtag/js?id=${gaId}`} />
+            <script
+              dangerouslySetInnerHTML={{
+                __html: `window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config','${gaId}');`,
+              }}
+            />
+          </>
+        )}
       </body>
     </html>
   );

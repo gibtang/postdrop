@@ -9,7 +9,7 @@ import {
   saveRaw,
   type Artifact,
   type ShareLink,
-} from "@postdrop/sdk";
+} from "postdrop-sdk";
 
 const BASE_URL = process.env.POSTDROP_BASE_URL ?? "https://thepostdrop.dev";
 

@@ -23,6 +23,7 @@
     "mongoose": "^8.9.0",
     "next": "^15.1.0",
     "next-auth": "^5.0.0-beta.25",
+    "posthog-js": "^1.444.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "sonner": "^1.7.0",
