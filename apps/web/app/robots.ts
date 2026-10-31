@@ -1,5 +1,8 @@
 import type { MetadataRoute } from "next";
 
+// Render at request time: BASE_URL is runtime env, never a build arg.
+export const dynamic = "force-dynamic";
+
 const BASE = (process.env.BASE_URL ?? "http://localhost:3000").replace(/\/+$/, "");
 
 /** Crawl the public marketing surface; keep agents out of the app and viewer surface. */
