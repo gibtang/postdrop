@@ -60,12 +60,4 @@ done
 echo "== via traefik (host loopback, SNI thepostdrop.dev)"
 curl -sk --resolve thepostdrop.dev:443:127.0.0.1 -o /dev/null -w "login: %{http_code}\n" "https://thepostdrop.dev/login"
 curl -sk --resolve thepostdrop.dev:443:127.0.0.1 -o /dev/null -w "me(unauth): %{http_code}\n" "https://thepostdrop.dev/v1/me"
-
-echo "== cleanup broken coolify app resource"
-T=$(cat /home/ubuntu/.pd-coolify-token)
-AU=$(curl -s -H "Authorization: Bearer $T" "http://localhost:8000/api/v1/applications" | node -e "
-let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{
-  const j=JSON.parse(d);const a=(j.data||j).find(x=>x.name==='postdrop');
-  if(a)console.log(a.uuid);})")
-[ -n "${AU:-}" ] && curl -s -X DELETE -H "Authorization: Bearer $T" "http://localhost:8000/api/v1/applications/$AU" | head -c 100; echo
 echo "== done"

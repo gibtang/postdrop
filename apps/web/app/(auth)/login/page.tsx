@@ -17,11 +17,13 @@ const banners: Record<string, string> = {
   verified: "Email verified. You can sign in now.",
   unverified: "That verification link was invalid or expired. Sign in to resend it.",
   reset: "Password updated. Sign in with your new password.",
+  google_linked:
+    "An account with this email already exists. Sign in with your password instead of Google.",
+  google_error: "Google sign-in failed. Try again, or sign in with email and password.",
 };
-
 export default async function LoginPage({ searchParams }: LoginProps) {
   const params = await searchParams;
-  const bannerKey = ["registered", "verified", "unverified", "reset"].find((k) => flag(params, k));
+  const bannerKey = ["registered", "verified", "unverified", "reset", "google_linked", "google_error"].find((k) => flag(params, k));
   const banner = bannerKey ? banners[bannerKey] : null;
   return (
     <main className="flex min-h-screen flex-col items-center justify-center gap-4 p-6">

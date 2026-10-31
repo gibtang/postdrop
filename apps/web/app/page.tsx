@@ -183,6 +183,12 @@ export default function Home() {
             >
               Open source · Apache-2.0
             </a>
+            <Link href="/privacy" className="transition hover:text-[#635bff]">
+              Privacy
+            </Link>
+            <Link href="/terms" className="transition hover:text-[#635bff]">
+              Terms
+            </Link>
             <Link href="/login" className="transition hover:text-[#635bff]">
               Sign in
             </Link>

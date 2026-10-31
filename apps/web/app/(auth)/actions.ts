@@ -49,7 +49,19 @@ export async function loginAction(_prev: FormState, formData: FormData): Promise
 }
 
 export async function googleSignInAction(): Promise<void> {
-  await signIn("google", { redirectTo: "/dashboard" });
+  try {
+    await signIn("google", { redirectTo: "/dashboard" });
+  } catch (err) {
+    // signIn's success path throws NEXT_REDIRECT, which must propagate;
+    // only AuthError failures land here.
+    if (err instanceof AuthError) {
+      if (err.type === "OAuthAccountNotLinked") {
+        redirect("/login?google_linked=1");
+      }
+      redirect("/login?google_error=1");
+    }
+    throw err;
+  }
 }
 
 export async function signupAction(_prev: FormState, formData: FormData): Promise<FormState> {

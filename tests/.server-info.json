@@ -1,1 +1,1 @@
-{"baseUrl":"http://localhost:3111","mongoUri":"mongodb://127.0.0.1:57925/postdrop","runId":"tmvw53mlnz6qg","storagePath":"/var/folders/dh/_ssqmhds6q97gvcytt5jb99w0000gn/T/postdrop-storage-TOkmNs","maxArtifactBytes":4096,"quotaBytes":4096}
+{"baseUrl":"http://localhost:3111","mongoUri":"mongodb://127.0.0.1:51791/postdrop","runId":"tmvwesy402y7y","storagePath":"/var/folders/dh/_ssqmhds6q97gvcytt5jb99w0000gn/T/postdrop-storage-GpShwl","maxArtifactBytes":4096,"quotaBytes":4096}
