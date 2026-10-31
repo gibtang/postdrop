@@ -30,8 +30,10 @@ docker run -d --name postdrop-web --restart unless-stopped --network coolify \
   -e S3_BUCKET="$S3_BUCKET" \
   -e S3_ACCESS_KEY_ID="$S3_ACCESS_KEY_ID" \
   -e S3_SECRET_ACCESS_KEY="$S3_SECRET_ACCESS_KEY" \
-  -e RESEND_API_KEY="$RESEND_API_KEY" \
-  -e RESEND_FROM="$RESEND_FROM" \
+  -e SES_ACCESS_KEY_ID="$SES_ACCESS_KEY_ID" \
+  -e SES_SECRET_ACCESS_KEY="$SES_SECRET_ACCESS_KEY" \
+  -e SES_REGION="eu-north-1" \
+  -e MAIL_FROM="no-reply@thepostdrop.dev" \
   -l traefik.docker.network=coolify \
   -l traefik.enable=true \
   -l traefik.http.middlewares.postdrop-gzip.compress=true \

@@ -10,12 +10,12 @@ Use `ssh -F ~/Dropbox/ssh/config vps` (plain `ubuntu@66.70.190.82` stopped resol
 |---|---|
 | `/home/ubuntu/postdrop/src` | Deployed source (rsync target) |
 | `/home/ubuntu/postdrop/secrets.env` | Mongo password, AUTH_SECRET (600) |
-| `/home/ubuntu/postdrop/secrets-b2.env` | B2 keys, bucket, Resend values (600) |
+| `/home/ubuntu/postdrop/secrets-b2.env` | B2 keys, bucket, SES email values (600) |
 | container `postdrop-web` | Next.js standalone (binds 0.0.0.0:3000, Traefik labels) |
 | container `postdrop-mongo` | Mongo 7 on `coolify` network, volume `postdrop-mongo-data` |
 | B2 bucket | `postdrop-files-e0a33531d28c` (S3 endpoint `s3.us-east-005.backblazeb2.com`) |
 
-Required env (see `apps/web/.env.example`): `MONGODB_URI`, `BASE_URL`, `AUTH_SECRET`, `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET`, `RESEND_*` (optional — unset means password signups auto-verify), `STORAGE_DRIVER=s3` + `S3_*` (presigned uploads require s3), `MAX_ARTIFACT_BYTES`, `QUOTA_BYTES`.
+Required env (see `apps/web/.env.example`): `MONGODB_URI`, `BASE_URL`, `AUTH_SECRET`, `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET`, `SES_*` + `MAIL_FROM` (optional — unset means password signups auto-verify), `STORAGE_DRIVER=s3` + `S3_*` (presigned uploads require s3), `MAX_ARTIFACT_BYTES`, `QUOTA_BYTES`.
 
 ## Redeploy (from repo root on the Mac) — self-host path
 
@@ -42,8 +42,8 @@ MCP (remote — no install): point agents at `https://thepostdrop.dev/api/mcp` w
 
 ## Known limitations
 
-- **Dashboard login**: Auth.js v5 — Google OAuth + email/password (scrypt, email-verified before first credentials login; signup auto-verifies when Resend is unconfigured). Firebase is gone (ADR 0010 supersedes 0007).
-- Email (verification/reset) via Resend; unset degrades gracefully with auto-verify.
+- **Dashboard login**: Auth.js v5 — Google OAuth + email/password (scrypt, email-verified before first credentials login; signup auto-verifies when SES is unconfigured). Firebase is gone (ADR 0010 supersedes 0007).
+- Email (verification/reset) via Amazon SES (thepostdrop.dev identity, eu-north-1); unset degrades gracefully with auto-verify.
 - Deploy is a Coolify-network container on the VPS path, not a Coolify-managed resource — ADR 0006.
 - Limits: **5 MB per artifact** (`413 FILE_TOO_LARGE`), **500 MB per account** (`422 QUOTA_EXCEEDED`); 60 uploads/min per token (`429`). Format whitelist enforced server-side (`422 UNSUPPORTED_FORMAT`). No billing.
 - No webhooks (removed with the pivot) — agents poll via CLI/MCP.

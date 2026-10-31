@@ -1,8 +1,29 @@
-import { Resend } from "resend";
+import { SESv2Client, SendEmailCommand } from "@aws-sdk/client-sesv2";
 
-/** True when Resend is configured; auth flows auto-verify signups when false. */
+/**
+ * Transactional email via Amazon SES (domain identity thepostdrop.dev,
+ * eu-north-1). Unset credentials degrade to a no-op: auth flows auto-verify
+ * signups and reset/verification email is unavailable (self-host friendly).
+ */
 export function isEmailConfigured(): boolean {
-  return Boolean(process.env.RESEND_API_KEY && process.env.RESEND_FROM);
+  return Boolean(process.env.SES_ACCESS_KEY_ID && mailFrom());
+}
+
+function mailFrom(): string {
+  return process.env.MAIL_FROM ?? "no-reply@thepostdrop.dev";
+}
+
+let cachedClient: SESv2Client | null = null;
+
+function sesClient(): SESv2Client {
+  cachedClient ??= new SESv2Client({
+    region: process.env.SES_REGION ?? "eu-north-1",
+    credentials: {
+      accessKeyId: process.env.SES_ACCESS_KEY_ID ?? "",
+      secretAccessKey: process.env.SES_SECRET_ACCESS_KEY ?? "",
+    },
+  });
+  return cachedClient;
 }
 
 async function sendEmail(params: {
@@ -11,28 +32,29 @@ async function sendEmail(params: {
   html: string;
   text: string;
 }): Promise<boolean> {
-  const apiKey = process.env.RESEND_API_KEY;
-  const from = process.env.RESEND_FROM;
-  if (!apiKey || !from) {
-    console.error("email: RESEND_API_KEY/RESEND_FROM not configured; skipping send");
+  if (!process.env.SES_ACCESS_KEY_ID) {
+    console.error("email: SES_ACCESS_KEY_ID not configured; skipping send");
     return false;
   }
-  const resend = new Resend(apiKey);
   try {
-    const result = await resend.emails.send({
-      from,
-      to: params.to,
-      subject: params.subject,
-      html: params.html,
-      text: params.text,
-    });
-    if (result.error) {
-      console.error(`email: Resend rejected send to ${params.to}: ${result.error.message}`);
-      return false;
-    }
+    await sesClient().send(
+      new SendEmailCommand({
+        FromEmailAddress: `Postdrop <${mailFrom()}>`,
+        Destination: { ToAddresses: [params.to] },
+        Content: {
+          Simple: {
+            Subject: { Data: params.subject, Charset: "UTF-8" },
+            Body: {
+              Html: { Data: params.html, Charset: "UTF-8" },
+              Text: { Data: params.text, Charset: "UTF-8" },
+            },
+          },
+        },
+      }),
+    );
     return true;
   } catch (err) {
-    console.error("email: send failed:", err instanceof Error ? err.message : err);
+    console.error(`email: SES send to ${params.to} failed:`, err instanceof Error ? err.message : err);
     return false;
   }
 }
@@ -57,7 +79,7 @@ function brandedHtml(opts: {
 <h1 style="margin:0 0 16px;font-size:20px">${opts.heading}</h1>
 ${opts.bodyHtml}
 <p style="margin:24px 0"><a href="${escapeHtml(opts.buttonUrl)}" style="display:inline-block;background:#1a1a2e;color:#ffffff;padding:12px 24px;border-radius:8px;text-decoration:none;font-family:sans-serif;font-size:15px">${escapeHtml(opts.buttonText)}</a></p>
-<p style="margin:32px 0 0;font-size:12px;color:#8a8aa3">Sent via Postdrop — file delivery with a reply, not a login.</p>
+<p style="margin:32px 0 0;font-size:12px;color:#8a8aa3">Sent via Postdrop — share web-renderable artifacts with anyone.</p>
 </div></body></html>`;
 }
 

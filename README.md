@@ -40,7 +40,7 @@ pnpm --filter @postdrop/web start
 
 - **MongoDB** — any Mongo 6+ (Atlas free tier works)
 - **Storage** — `STORAGE_DRIVER=disk` for dev; `s3` for Backblaze B2 or any S3-compatible endpoint. B2 requires `forcePathStyle`-compatible endpoints (already configured). Bucket CORS must allow PUT from your dashboard origin for >4.5 MB uploads.
-- **Auth** — set `GOOGLE_CLIENT_ID`/`SECRET` (Google Cloud console → OAuth client). Resend is optional: unset it means password signups are auto-verified and reset/verification email is unavailable.
+- **Auth** — set `GOOGLE_CLIENT_ID`/`SECRET` (Google Cloud console → OAuth client). Transactional email: SES (`SES_ACCESS_KEY_ID`/`SES_SECRET_ACCESS_KEY`, `MAIL_FROM`). SES is optional: unset it means password signups are auto-verified and reset/verification email is unavailable.
 - **VPS/Coolify** — see `docs/OPERATIONS.md` and ADR 0006 (labeled-container path).
 
 ## Docs

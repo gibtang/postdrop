@@ -34,7 +34,7 @@ Frozen integration contract for the artifact-sharing service (post-pivot, 2026-1
 
 ## Env contract (`apps/web/.env.example`)
 
-`MONGODB_URI`, `BASE_URL`, `AUTH_SECRET`, `AUTH_TRUST_HOST`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `RESEND_API_KEY`/`RESEND_FROM` (optional — unset auto-verifies signups), `STORAGE_DRIVER` + `DISK_STORAGE_PATH` or `S3_*`, `MAX_ARTIFACT_BYTES`, `QUOTA_BYTES`, `SWEEPER_DISABLED`. Clients: `POSTDROP_TOKEN`, `POSTDROP_BASE_URL`. Nothing else is read.
+`MONGODB_URI`, `BASE_URL`, `AUTH_SECRET`, `AUTH_TRUST_HOST`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `SES_ACCESS_KEY_ID`/`SES_SECRET_ACCESS_KEY`/`SES_REGION`/`MAIL_FROM` (optional — unset auto-verifies signups), `STORAGE_DRIVER` + `DISK_STORAGE_PATH` or `S3_*`, `MAX_ARTIFACT_BYTES`, `QUOTA_BYTES`, `SWEEPER_DISABLED`. Clients: `POSTDROP_TOKEN`, `POSTDROP_BASE_URL`. Nothing else is read.
 
 ## Deploy
 
