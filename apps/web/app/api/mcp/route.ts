@@ -1,8 +1,5 @@
-import { EventEmitter } from "node:events";
-import { Readable } from "node:stream";
-import type { IncomingMessage, ServerResponse } from "node:http";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
+import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import { z } from "zod";
 import type { NextRequest } from "next/server";
 import { connectDb } from "@/lib/db";
@@ -11,9 +8,7 @@ import { requireToken } from "@/lib/token-auth";
 import {
   apiError,
   apiJson,
-  checkQuota,
   createArtifactFromBytes,
-  checkUploadFormat,
   maxArtifactBytes,
   serializeArtifact,
   serializeShareLink,
@@ -21,82 +16,6 @@ import {
 import { getStorage } from "@/lib/storage/index";
 import { c32hex } from "@/lib/ids";
 import { recordEvent } from "@/lib/events";
-
-/**
- * Minimal Node HTTP primitives for the MCP SDK's StreamableHTTP transport,
- * which duck-types IncomingMessage/ServerResponse. This adapter is only ever
- * handed to the SDK, never to node's http server.
- */
-type NodeReq = Readable & IncomingMessage;
-
-function makeNodeRes(): { res: ServerResponse; body: () => Buffer; whenDone: Promise<void> } {
-  const chunks: Buffer[] = [];
-  const emitter = new EventEmitter() as ServerResponse & EventEmitter;
-  // Promise.withResolvers is unavailable under this tsconfig lib target.
-  let done: () => void;
-  const promise = new Promise<void>((resolve) => {
-    done = resolve;
-  });
-  const headers: Record<string, string> = {};
-  Object.assign(emitter, {
-    statusCode: 200,
-    statusMessage: "OK",
-    writeHead(status: number, init?: Record<string, string> | string[]) {
-      emitter.statusCode = status;
-      if (Array.isArray(init)) {
-        for (let i = 0; i < init.length; i += 2) headers[init[i].toLowerCase()] = init[i + 1];
-      } else if (init) {
-        for (const [k, v] of Object.entries(init)) headers[k.toLowerCase()] = String(v);
-      }
-      return emitter;
-    },
-    setHeader(name: string, value: string | string[]) {
-      headers[name.toLowerCase()] = Array.isArray(value) ? value.join(", ") : value;
-      return emitter;
-    },
-    getHeader(name: string) {
-      return headers[name.toLowerCase()];
-    },
-    removeHeader(name: string) {
-      delete headers[name.toLowerCase()];
-    },
-    getHeaders() {
-      return { ...headers };
-    },
-    flushHeaders() {},
-    write(chunk: unknown) {
-      chunks.push(Buffer.from(chunk as Uint8Array));
-      return true;
-    },
-    end(chunk?: unknown) {
-      if (chunk !== undefined) chunks.push(Buffer.from(chunk as Uint8Array));
-      done();
-      return emitter;
-    },
-    on(event: string, listener: (...args: unknown[]) => void) {
-      emitter.addListener(event, listener);
-      return emitter;
-    },
-  });
-  return {
-    res: emitter,
-    body: () => Buffer.concat(chunks),
-    whenDone: promise,
-  };
-}
-
-function makeNodeReq(req: Request, parsedBody: unknown): NodeReq {
-  const passthrough = new Readable({ read() {} });
-  // The MCP transport duck-types IncomingMessage; feed it the already-parsed
-  // body via the stream it will consume.
-  passthrough.push(JSON.stringify(parsedBody));
-  passthrough.push(null);
-  return Object.assign(passthrough, {
-    method: req.method,
-    url: new URL(req.url).pathname,
-    headers: Object.fromEntries(req.headers.entries()),
-  }) as NodeReq;
-}
 
 function errorResult(status: number, code: string, message: string) {
   return {
@@ -226,13 +145,20 @@ function buildServer(userId: string): McpServer {
     },
     async ({ filename, content_base64, name }) => {
       const bytes = Buffer.from(content_base64, "base64");
-      const display = name ?? filename;
-      const format = checkUploadFormat(display, bytes.byteLength);
-      if (!format.ok) return errorResult(format.status, format.code, format.message);
-      const quota = await checkQuota(userId, bytes.byteLength);
-      if (!quota.ok) return errorResult(quota.status, quota.code, quota.message);
-      const result = await createArtifactFromBytes(userId, bytes, display);
-      if (!result.ok) return errorResult(500, "UPLOAD_FAILED", "Upload failed");
+      // REST contract: `name` replaces the stored filename when provided;
+      // format derives from that merged name (CLI pre-appends an extension).
+      const merged = typeof name === "string" && name.trim() !== "" ? name.trim() : filename;
+      const result = await createArtifactFromBytes(userId, bytes, merged);
+      if (!result.ok) {
+        const detail = (await result.res.json().catch(() => null)) as {
+          error?: { code?: unknown; message?: unknown };
+        } | null;
+        return errorResult(
+          result.res.status,
+          typeof detail?.error?.code === "string" ? detail.error.code : "UPLOAD_FAILED",
+          typeof detail?.error?.message === "string" ? detail.error.message : "Upload failed",
+        );
+      }
       return jsonResult({ artifact: serializeArtifact(result.artifact) });
     },
   );
@@ -244,13 +170,19 @@ function buildServer(userId: string): McpServer {
     async ({ url, name }) => {
       const fetched = await fetchArtifactBytes(url);
       if (!fetched.ok) return errorResult(fetched.status, fetched.code, fetched.message);
-      const display = name ?? fetched.filename;
-      const format = checkUploadFormat(display, fetched.bytes.byteLength);
-      if (!format.ok) return errorResult(format.status, format.code, format.message);
-      const quota = await checkQuota(userId, fetched.bytes.byteLength);
-      if (!quota.ok) return errorResult(quota.status, quota.code, quota.message);
-      const result = await createArtifactFromBytes(userId, fetched.bytes, display);
-      if (!result.ok) return errorResult(500, "UPLOAD_FAILED", "Upload failed");
+      // REST contract: `name` replaces the fetched filename when provided.
+      const merged = typeof name === "string" && name.trim() !== "" ? name.trim() : fetched.filename;
+      const result = await createArtifactFromBytes(userId, fetched.bytes, merged);
+      if (!result.ok) {
+        const detail = (await result.res.json().catch(() => null)) as {
+          error?: { code?: unknown; message?: unknown };
+        } | null;
+        return errorResult(
+          result.res.status,
+          typeof detail?.error?.code === "string" ? detail.error.code : "UPLOAD_FAILED",
+          typeof detail?.error?.message === "string" ? detail.error.message : "Upload failed",
+        );
+      }
       return jsonResult({ artifact: serializeArtifact(result.artifact) });
     },
   );
@@ -355,31 +287,22 @@ export async function POST(req: NextRequest) {
   }
 
   const server = buildServer(token.userId);
-  const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
-  const { res: nodeRes, body, whenDone } = makeNodeRes();
+  // Stateless: every request is self-contained (no Mcp-Session-Id handshake).
+  // JSON responses keep the server proxy-friendly — no long-lived SSE streams.
+  const transport = new WebStandardStreamableHTTPServerTransport({
+    sessionIdGenerator: undefined,
+    enableJsonResponse: true,
+  });
   try {
     await server.connect(transport);
-    await transport.handleRequest(makeNodeReq(req, parsedBody), nodeRes, parsedBody);
-    await whenDone;
+    // NextRequest is a web-standard Request; parsedBody avoids a second body read.
+    return await transport.handleRequest(req, { parsedBody });
   } catch (err: unknown) {
     return apiError(400, "BAD_REQUEST", err instanceof Error ? err.message : "Invalid MCP request");
   } finally {
     await transport.close().catch(() => {});
     await server.close().catch(() => {});
   }
-  const headers: Record<string, string> = {};
-  for (const [k, v] of Object.entries(nodeRes.getHeaders())) {
-    if (typeof v === "string") headers[k] = v;
-  }
-  delete headers["content-length"];
-  delete headers["transfer-encoding"];
-  delete headers["connection"];
-  delete headers["keep-alive"];
-  return apiJsonRaw(nodeRes.statusCode, body(), headers);
-}
-
-function apiJsonRaw(status: number, body: Buffer, headers: Record<string, string>): Response {
-  return new Response(new Uint8Array(body), { status, headers });
 }
 
 export async function GET() {
