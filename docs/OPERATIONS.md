@@ -15,7 +15,7 @@ Use `ssh -F ~/Dropbox/ssh/config vps` (plain `ubuntu@66.70.190.82` stopped resol
 | container `postdrop-mongo` | Mongo 7 on `coolify` network, volume `postdrop-mongo-data` |
 | B2 bucket | `postdrop-files-e0a33531d28c` (S3 endpoint `s3.us-east-005.backblazeb2.com`) |
 
-Required env (see `apps/web/.env.example`): `MONGODB_URI`, `BASE_URL`, `AUTH_SECRET`, `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET`, `SES_*` + `MAIL_FROM` (optional — unset means password signups auto-verify), `STORAGE_DRIVER=s3` + `S3_*` (presigned uploads require s3), `MAX_ARTIFACT_BYTES`, `QUOTA_BYTES`.
+Required env (see `apps/web/.env.example`): `MONGODB_URI`, `BASE_URL`, `AUTH_SECRET`, `AUTH_URL` (pins the Auth.js base URL behind the proxy — without it OAuth redirects use `0.0.0.0:3000`), `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET`, `SES_*` + `MAIL_FROM` (optional — unset means password signups auto-verify), `STORAGE_DRIVER=s3` + `S3_*` (presigned uploads require s3), `MAX_ARTIFACT_BYTES`, `QUOTA_BYTES`.
 
 ## Redeploy (from repo root on the Mac) — self-host path
 

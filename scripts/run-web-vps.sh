@@ -23,6 +23,7 @@ docker rm -f postdrop-web >/dev/null 2>&1 || true
 docker run -d --name postdrop-web --restart unless-stopped --network coolify \
   -e BASE_URL="https://thepostdrop.dev" \
   -e HOSTNAME=0.0.0.0 \
+  -e AUTH_URL="https://thepostdrop.dev" \
   -e AUTH_SECRET="$AUTH_SECRET" \
   -e AUTH_TRUST_HOST=true \
   -e GOOGLE_CLIENT_ID="$GOOGLE_CLIENT_ID" \
