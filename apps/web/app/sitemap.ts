@@ -5,9 +5,9 @@ export const dynamic = "force-dynamic";
 
 const BASE = (process.env.BASE_URL ?? "http://localhost:3000").replace(/\/+$/, "");
 
-/** Public marketing/auth surface only — viewer, dashboard, and paste URLs are private or ephemeral. */
+/** Public marketing/legal surface only — viewer, dashboard, and paste URLs are private or ephemeral. */
 export default function sitemap(): MetadataRoute.Sitemap {
-  const routes = ["/", "/login", "/signup"];
+  const routes = ["/", "/terms", "/privacy"];
   return routes.map((path) => ({
     url: `${BASE}${path}`,
     changeFrequency: "weekly",

@@ -39,6 +39,19 @@ const valueProps = [
 const FORMAT_SENTENCE =
   "Postdrop accepts web-renderable formats only: PNG, JPEG, GIF, WebP, AVIF, SVG, PDF, MP4, WebM, MP3, WAV, OGG, TXT, MD, HTML, JSON, CSV, and XML.";
 
+const jsonLd = {
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  name: "Postdrop",
+  applicationCategory: "DeveloperApplication",
+  operatingSystem: "Web",
+  url: "https://thepostdrop.dev",
+  description:
+    "Agents upload artifacts with a bearer token, share a link, and anyone can open the result in a browser. View-only, no accounts, open source.",
+  offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
+  author: { "@type": "Organization", name: "Postdrop" },
+};
+
 function Brand() {
   return (
     <Link href="/" className="inline-flex items-center gap-2.5" aria-label="Postdrop home">
@@ -53,6 +66,10 @@ function Brand() {
 export default function Home() {
   return (
     <main className="landing-shell min-h-screen text-[#15152b]">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
       <header className="mx-auto max-w-6xl px-5 pt-5 sm:px-8">
         <nav
           aria-label="Main navigation"

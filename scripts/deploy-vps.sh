@@ -55,6 +55,9 @@ services:
       - S3_SECRET_ACCESS_KEY=$S3_SECRET_ACCESS_KEY
       - SES_ACCESS_KEY_ID=$SES_ACCESS_KEY_ID
       - SES_SECRET_ACCESS_KEY=$SES_SECRET_ACCESS_KEY
+      - NEXT_PUBLIC_POSTHOG_KEY=$NEXT_PUBLIC_POSTHOG_KEY
+      - NEXT_PUBLIC_POSTHOG_HOST=${NEXT_PUBLIC_POSTHOG_HOST:-https://us.i.posthog.com}
+      - GA_MEASUREMENT_ID=$GA_MEASUREMENT_ID
     networks:
       - default
       - coolify
@@ -63,12 +66,15 @@ services:
       - traefik.enable=true
       - traefik.http.middlewares.postdrop-gzip.compress=true
       - traefik.http.middlewares.postdrop-redirect.redirectscheme.scheme=https
+      - traefik.http.middlewares.postdrop-redirect.redirectscheme.permanent=true
+      - traefik.http.middlewares.postdrop-www.redirectregex.regex=^https://www\\.thepostdrop\\.dev/(.*)
+      - traefik.http.middlewares.postdrop-www.redirectregex.replacement=https://thepostdrop.dev/\$\$1
       - traefik.http.routers.postdrop-http.entrypoints=http
       - traefik.http.routers.postdrop-http.middlewares=postdrop-redirect
       - traefik.http.routers.postdrop-http.rule=Host(\`thepostdrop.dev\`) || Host(\`www.thepostdrop.dev\`)
       - traefik.http.routers.postdrop-http.service=postdrop-web-svc
       - traefik.http.routers.postdrop-https.entrypoints=https
-      - traefik.http.routers.postdrop-https.middlewares=postdrop-gzip
+      - traefik.http.routers.postdrop-https.middlewares=postdrop-gzip,postdrop-www
       - traefik.http.routers.postdrop-https.rule=Host(\`thepostdrop.dev\`) || Host(\`www.thepostdrop.dev\`)
       - traefik.http.routers.postdrop-https.service=postdrop-web-svc
       - traefik.http.routers.postdrop-https.tls=true

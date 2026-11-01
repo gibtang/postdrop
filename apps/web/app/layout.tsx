@@ -8,8 +8,10 @@ import "./globals.css";
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 
 export const metadata: Metadata = {
+  metadataBase: new URL(process.env.BASE_URL ?? "https://thepostdrop.dev"),
   title: "Postdrop",
   description: "Share web-renderable artifacts from your agents — public links, no login needed",
+  alternates: { canonical: "./" },
 };
 
 export default function RootLayout({

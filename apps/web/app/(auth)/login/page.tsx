@@ -1,7 +1,10 @@
 import Link from "next/link";
 import { LoginForm } from "./login-form";
 
-export const metadata = { title: "Sign in — Postdrop" };
+export const metadata = {
+  title: "Sign in — Postdrop",
+  description: "Sign in to manage your Postdrop artifacts, upload tokens, and share links.",
+};
 
 interface LoginProps {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
@@ -18,12 +21,17 @@ const banners: Record<string, string> = {
   unverified: "That verification link was invalid or expired. Sign in to resend it.",
   reset: "Password updated. Sign in with your new password.",
   google_linked:
-    "An account with this email already exists. Sign in with your password instead of Google.",
+    "This Google account is already linked to a different Postdrop account. Sign in with the linked account or contact support.",
+  link_google_required:
+    "Sign in to your existing Postdrop account first, then link Google under Dashboard settings.",
   google_error: "Google sign-in failed. Try again, or sign in with email and password.",
 };
 export default async function LoginPage({ searchParams }: LoginProps) {
   const params = await searchParams;
-  const bannerKey = ["registered", "verified", "unverified", "reset", "google_linked", "google_error"].find((k) => flag(params, k));
+  const authError = flag(params, "error");
+  const bannerKey = ["registered", "verified", "unverified", "reset", "google_linked", "google_error"].find((k) => flag(params, k))
+    ?? (authError === "OAuthAccountNotLinked" ? "google_linked" : authError ? "google_error" : null)
+    ?? (flag(params, "link_google") ? "link_google_required" : null);
   const banner = bannerKey ? banners[bannerKey] : null;
   return (
     <main className="flex min-h-screen flex-col items-center justify-center gap-4 p-6">
