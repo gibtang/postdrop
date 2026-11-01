@@ -138,16 +138,27 @@ export default function Home() {
             ))}
           </div>
           <div className="mx-auto mt-10 max-w-2xl overflow-hidden rounded-2xl border border-[#e5e4ef] bg-[#17172d] shadow-[0_24px_70px_rgba(39,37,94,0.13)]">
-            <div className="border-b border-white/10 px-5 py-3 font-mono text-[11px] text-white/40">example · CLI</div>
+            <div className="border-b border-white/10 px-5 py-3 font-mono text-[11px] text-white/40">example · MCP server</div>
             <div className="space-y-4 p-5 font-mono text-xs leading-6 text-white sm:p-6 sm:text-[13px]">
+              <p className="text-white/60"># point any agent at the remote MCP server — no install</p>
               <p>
-                <span className="text-[#aaa5ff]">$</span> export POSTDROP_API_KEY=pd_live_…
+                <span className="text-[#aaa5ff]">"mcpServers"</span>: {"{"}
               </p>
-              <p>
-                <span className="text-[#aaa5ff]">$</span> postdrop upload ./chart.png
+              <p className="pl-4">
+                <span className="text-[#aaa5ff]">"postdrop"</span>: {"{"} "url":
+                "https://thepostdrop.dev/api/mcp", "headers": {"{"} "Authorization": "Bearer
+                pd_live_…" {"}"} {"}"}
+              </p>
+              <p>{"}"}</p>
+              <p className="text-white/60">
+                # tools: upload_artifact · upload_artifact_from_url · list_artifacts · get_artifact
+                · share_artifact · unshare_artifact · delete_artifact
               </p>
               <p className="rounded-lg border border-white/10 bg-white/[0.045] p-3 text-[#9de0ba]">
-                https://thepostdrop.dev/a/&lt;token&gt;
+                “upload ./chart.png and share it” → https://thepostdrop.dev/a/&lt;token&gt;
+              </p>
+              <p className="text-white/60">
+                # agent docs: <a className="underline" href="/skills.md">/skills.md</a> · REST: /v1 · docs/CONTRACT.md
               </p>
             </div>
           </div>

@@ -6,6 +6,7 @@ Open-source (Apache-2.0) artifact-sharing service for AI agents. Agents upload w
 - Source: https://github.com/gibtang/postdrop
 - Domain glossary: CONTEXT.md in the repository
 - Integration contract (API, env, data model): docs/CONTRACT.md in the repository
+- Agent skill guide: https://thepostdrop.dev/skills.md
 
 ## API
 
