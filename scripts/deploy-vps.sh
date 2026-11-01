@@ -69,6 +69,7 @@ services:
       - traefik.http.middlewares.postdrop-redirect.redirectscheme.permanent=true
       - traefik.http.middlewares.postdrop-www.redirectregex.regex=^https://www\\.thepostdrop\\.dev/(.*)
       - traefik.http.middlewares.postdrop-www.redirectregex.replacement=https://thepostdrop.dev/\$\$1
+      - traefik.http.middlewares.postdrop-www.redirectregex.permanent=true
       - traefik.http.routers.postdrop-http.entrypoints=http
       - traefik.http.routers.postdrop-http.middlewares=postdrop-redirect
       - traefik.http.routers.postdrop-http.rule=Host(\`thepostdrop.dev\`) || Host(\`www.thepostdrop.dev\`)

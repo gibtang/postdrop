@@ -49,6 +49,7 @@ docker run -d --name postdrop-web --restart unless-stopped --network coolify \
   -l traefik.http.middlewares.postdrop-redirect.redirectscheme.permanent=true \
   -l "traefik.http.middlewares.postdrop-www.redirectregex.regex=^https://www\\.thepostdrop\\.dev/(.*)" \
   -l "traefik.http.middlewares.postdrop-www.redirectregex.replacement=https://thepostdrop.dev/\$1" \
+  -l traefik.http.middlewares.postdrop-www.redirectregex.permanent=true \
   -l traefik.http.routers.postdrop-http.entrypoints=http \
   -l traefik.http.routers.postdrop-http.middlewares=postdrop-redirect \
   -l "traefik.http.routers.postdrop-http.rule=Host(\`thepostdrop.dev\`) || Host(\`www.thepostdrop.dev\`)" \
