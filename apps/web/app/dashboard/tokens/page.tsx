@@ -24,7 +24,7 @@ export default async function TokensPage() {
       <div>
         <h1 className="text-xl font-semibold tracking-tight text-[var(--text)]">API tokens</h1>
         <p className="mt-1 text-sm text-[var(--text-muted)]">
-          Bearer keys for the CLI, MCP server, and /v1 REST API. Tokens are shown once at creation.
+          Bearer keys for the remote MCP server and /v1 REST API. Tokens are shown once at creation.
         </p>
       </div>
 

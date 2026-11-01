@@ -40,5 +40,5 @@ REST (same token): `https://thepostdrop.dev/v1/*`.
 - Email (verification/reset) via Amazon SES (thepostdrop.dev identity, eu-north-1); unset degrades gracefully with auto-verify.
 - Deploy is a Coolify-network container on the VPS path, not a Coolify-managed resource — ADR 0006.
 - Limits: **5 MB per artifact** (`413 FILE_TOO_LARGE`), **500 MB per account** (`422 QUOTA_EXCEEDED`); 60 uploads/min per token (`429`). Format whitelist enforced server-side (`422 UNSUPPORTED_FORMAT`). No billing.
-- No webhooks (removed with the pivot) — agents poll via CLI/MCP.
+- No webhooks (removed with the pivot) — agents poll via MCP or REST.
 - Manual sweeper tick (session auth): `POST /api/sweeper/run` → `{expiredLinks, pastesPurged}`.

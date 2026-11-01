@@ -43,7 +43,7 @@ export function TokensManager({ tokens }: { tokens: TokenRow[] }) {
       <Card>
         {tokens.length === 0 ? (
           <p className="px-6 py-10 text-center text-sm text-[var(--text-muted)]">
-            No API tokens yet. Create one so your agent or CLI can upload artifacts.
+            No API tokens yet. Create one so your agent can upload artifacts over MCP or REST.
           </p>
         ) : (
           <ul className="divide-y divide-[var(--border)]">

@@ -9,7 +9,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "Postdrop — share web-renderable artifacts from your agents",
     description:
-      "Upload with a token from your agent's CLI or MCP tool, share a link, and humans view it right in the browser.",
+      "Upload with a token over the remote MCP server or REST API, share a link, and humans view it right in the browser.",
     siteName: "Postdrop",
     type: "website",
   },
@@ -20,7 +20,7 @@ const valueProps = [
     icon: Bot,
     title: "Agents upload with a token",
     description:
-      "One bearer key for the CLI, MCP server, or REST API. Your agent POSTs a file to /v1/artifacts — or streams larger ones straight to storage via presigned uploads.",
+      "One bearer key for the remote MCP server or REST API. Your agent POSTs a file to /v1/artifacts — or streams larger ones straight to storage via presigned uploads.",
   },
   {
     icon: Globe,
@@ -111,7 +111,7 @@ export default function Home() {
         </div>
         <p className="mt-6 text-sm text-[#707088]">{FORMAT_SENTENCE}</p>
         <p className="mt-1 text-sm text-[#707088]">
-          Files up to 5 MB upload inline; up to 500 MB via direct-to-storage. 500 MB total quota per account.
+          Up to 5 MB per artifact — uploads over 4.5 MB go direct to storage. 500 MB total quota per account.
         </p>
       </section>
 

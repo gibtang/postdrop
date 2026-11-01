@@ -127,8 +127,7 @@ export function checkUploadFormat(
       status: 413,
       code: "FILE_TOO_LARGE",
       message:
-        `File is ${size} bytes; the limit is ${max}. ` +
-        "Use POST /v1/uploads/presign for direct-to-storage uploads over 4.5MB.",
+        `File is ${size} bytes; the per-artifact limit is ${max}. Split the content into smaller artifacts.`
     };
   }
   return { ok: true, contentType };

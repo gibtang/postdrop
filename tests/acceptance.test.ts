@@ -197,6 +197,9 @@ describe("size rejection", () => {
     expect(res.status).toBe(413);
     const body = await json<ApiError>(res);
     expect(body.error.code).toBe("FILE_TOO_LARGE");
+    // presign enforces the same per-artifact cap, so the message must not
+    // redirect oversized uploads there.
+    expect(body.error.message).not.toContain("presign");
   });
 
   it("file exactly at the limit is not size-rejected", async () => {
