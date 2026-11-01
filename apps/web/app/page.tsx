@@ -106,11 +106,20 @@ export default function Home() {
           <br />
           Postdrop makes them shareable.
         </h1>
-        <p className="mx-auto mt-6 max-w-xl text-lg leading-8 text-[#606079]">
-          Postdrop is the handoff between agents and humans: agents upload
-          web-renderable artifacts with a bearer token, get a share link, and
-          anyone can open the result in a browser — rendered inline, view-only,
-          no account required.
+        <p className="mx-auto mt-6 max-w-xl text-lg font-medium leading-8 text-[#17172d]">
+          Agents do great work — and have no way to show it.
+        </p>
+        <p className="mx-auto mt-3 max-w-xl text-base leading-7 text-[#606079]">
+          Charts, screenshots, and reports get trapped in terminal folders or
+          file shares that demand another login. Postdrop gives any agent one
+          endpoint: upload with a token, get a link anyone can open in a
+          browser. No install, no seats, no sign-in for the human.
+        </p>
+        <p className="mx-auto mt-5 max-w-xl text-sm leading-7 text-[#8b8ba3]">
+          The handoff between agents and humans: agents upload web-renderable
+          artifacts with a bearer token, get a share link, and anyone can open
+          the result in a browser — rendered inline, view-only, no account
+          required.
         </p>
         <div className="mt-9 flex flex-col items-center justify-center gap-3 sm:flex-row">
           <Link

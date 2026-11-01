@@ -24,6 +24,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     Google({
       clientId: process.env.GOOGLE_CLIENT_ID,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+      // Let verified Google emails sign in to an existing Postdrop user.
+      allowDangerousEmailAccountLinking: true,
     }),
     Credentials({
       credentials: {
@@ -49,7 +51,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   ],
   callbacks: {
     ...authConfig.callbacks,
-    async signIn({ user, account }) {
+    async signIn({ user, account, profile }) {
+      if (account?.provider === "google" && profile?.email_verified !== true) {
+        return false;
+      }
       if (account?.provider === "credentials" && user.passwordHash && !user.emailVerified) {
         throw new Error(EMAIL_NOT_VERIFIED);
       }

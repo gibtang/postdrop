@@ -32,7 +32,7 @@ Authorization: Bearer pd_live_<64 hex>
 
 | Tool | Arguments | Notes |
 |---|---|---|
-| `upload_artifact` | `filename`, `content_base64`, `name?` | ≤5 MB; `name` (if set) **replaces** the stored filename — keep a renderable extension |
+| `upload_artifact` | `filename`, `content_base64`, `name?` | ≤5 MB; extension + content check run on `filename`; `name` is a display label (any text, no extension needed) |
 | `upload_artifact_from_url` | `url` (https), `name?` | server fetches ≤5 MB |
 | `list_artifacts` | `limit?` (1–200), `cursor?` | newest first → `{items, nextCursor}` |
 | `get_artifact` | `artifactId` | artifact + its share links |

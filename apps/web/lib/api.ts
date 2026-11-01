@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { Artifact, ShareLink, type ArtifactDoc, type ShareLinkDoc } from "./models";
-import { mimeForFilename, maxArtifactBytes, quotaBytes, ACTIVE_TYPES, SANDBOX_CSP } from "./formats";
+import { contentMatchesFormat, mimeForFilename, maxArtifactBytes, quotaBytes, ACTIVE_TYPES, SANDBOX_CSP } from "./formats";
 
 // Re-exported for endpoint modules that need the caps without a second import.
 export { maxArtifactBytes, quotaBytes } from "./formats";
@@ -154,12 +154,29 @@ export async function createArtifactFromBytes(
   userId: string,
   bytes: Buffer,
   filename: string,
+  opts?: { storedFilename?: string },
 ): Promise<{ ok: true; artifact: ArtifactDoc } | { ok: false; res: NextResponse }> {
+  // `filename` is the wire name: extension contract + content sniffing key off
+  // it. `storedFilename` (optional) is a display label that must never affect
+  // validation.
   const format = checkUploadFormat(filename, bytes.byteLength);
   if (!format.ok) return { ok: false, res: apiError(format.status, format.code, format.message) };
+  const contentMatch = contentMatchesFormat(bytes, format.contentType);
+  if (contentMatch === false) {
+    const ext = filename.slice(filename.lastIndexOf(".") + 1) || "file";
+    return {
+      ok: false,
+      res: apiError(
+        422,
+        "UNSUPPORTED_FORMAT",
+        `File content does not look like a valid ${ext} file (format detected from its bytes).`,
+      ),
+    };
+  }
   const quota = await checkQuota(userId, bytes.byteLength);
   if (!quota.ok) return { ok: false, res: apiError(quota.status, quota.code, quota.message) };
 
+  const stored = opts?.storedFilename?.trim() || filename;
   const artifactId = newId("art_");
   const key = artifactKey(artifactId, filename);
   await getStorage().putStream(key, toWebStream(bytes), {
@@ -170,17 +187,36 @@ export async function createArtifactFromBytes(
   const artifact = await Artifact.create({
     artifactId,
     userId,
-    filename,
+    filename: stored,
     contentType: format.contentType,
     size: bytes.byteLength,
     storageKey: key,
     createdAt: now,
     updatedAt: now,
   });
-  recordEvent({ type: "artifact_uploaded", userId, data: { artifactId, filename, size: bytes.byteLength } });
+  recordEvent({ type: "artifact_uploaded", userId, data: { artifactId, filename: stored, size: bytes.byteLength } });
   return { ok: true, artifact };
 }
 
 export function toWebStream(bytes: Buffer): ReadableStream {
   return new Blob([new Uint8Array(bytes)]).stream();
+}
+
+/** First bytes of a stored object, up to `max` — for magic-byte checks. */
+export async function readStoredHead(key: string, max: number): Promise<Buffer> {
+  const stream = await getStorage().getStream(key);
+  const reader = stream.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    chunks.push(value);
+    total += value.byteLength;
+    if (total >= max) {
+      await reader.cancel().catch(() => {});
+      break;
+    }
+  }
+  return Buffer.concat(chunks.map((c) => Buffer.from(c)));
 }

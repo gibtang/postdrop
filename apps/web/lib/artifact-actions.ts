@@ -9,12 +9,13 @@ import {
   checkUploadFormat,
   createArtifactFromBytes,
   maxArtifactBytes,
+  readStoredHead,
   serializeShareLink,
 } from "./api";
 import { requireUser } from "./auth-user";
 import { connectDb } from "./db";
 import { serializeForDashboard } from "./dashboard-serialize";
-import { mimeForFilename } from "./formats";
+import { contentMatchesFormat, mimeForFilename } from "./formats";
 import { c32hex, newId, newToken } from "./ids";
 import { artifactKey, getStorage } from "./storage/index";
 import { recordEvent } from "./events";
@@ -52,11 +53,13 @@ export async function uploadArtifactAction(
   const file = formData.get("file");
   if (!(file instanceof File)) return fail("No file selected.");
   const nameField = formData.get("name");
-  const filename = typeof nameField === "string" && nameField !== "" ? nameField : file.name;
 
   const bytes = Buffer.from(await file.arrayBuffer());
   await connectDb();
-  const result = await createArtifactFromBytes(String(user._id), bytes, filename);
+  // Wire filename carries the format contract; `name` is display-only.
+  const result = await createArtifactFromBytes(String(user._id), bytes, file.name, {
+    storedFilename: typeof nameField === "string" && nameField !== "" ? nameField : undefined,
+  });
   if (!result.ok) return fail(resultMessage(result.res.status));
   revalidateDashboard();
   return { ok: true, artifact: serializeForDashboard(result.artifact) };
@@ -128,6 +131,12 @@ export async function completeUploadAction(input: {
   if (head.size > max) return fail(`Uploaded file is too large (limit is ${max} bytes).`);
   const quota = await checkQuota(String(user._id), head.size);
   if (!quota.ok) return fail(quota.message);
+  const contentMatch = contentMatchesFormat(await readStoredHead(key, 64), contentType);
+  if (contentMatch === false) {
+    return fail(
+      `Uploaded content does not look like a valid ${filename.slice(filename.lastIndexOf(".") + 1) || "file"} file.`,
+    );
+  }
 
   const now = new Date();
   const artifact = await Artifact.create({
@@ -167,8 +176,15 @@ export async function editArtifactAction(
   if (!artifact) return fail("Artifact not found.");
 
   const bytes = Buffer.from(await file.arrayBuffer());
-  const format = checkUploadFormat(filename, bytes.byteLength);
+  // Wire filename carries the format contract; `name` is display-only.
+  const format = checkUploadFormat(file.name, bytes.byteLength);
   if (!format.ok) return fail(format.message);
+  const contentMatch = contentMatchesFormat(bytes, format.contentType);
+  if (contentMatch === false) {
+    return fail(
+      `File content does not look like a valid ${file.name.slice(file.name.lastIndexOf(".") + 1) || "file"} file.`,
+    );
+  }
   const quota = await checkQuota(String(user._id), bytes.byteLength - artifact.size);
   if (!quota.ok) return fail(quota.message);
 
@@ -176,7 +192,7 @@ export async function editArtifactAction(
     contentType: format.contentType,
     contentLength: bytes.byteLength,
   });
-  artifact.filename = filename;
+  artifact.filename = typeof nameField === "string" && nameField !== "" ? nameField : file.name;
   artifact.contentType = format.contentType;
   artifact.size = bytes.byteLength;
   artifact.updatedAt = new Date();
@@ -213,6 +229,12 @@ export async function completeEditAction(input: {
   if (head.size > max) return fail(`Uploaded file is too large (limit is ${max} bytes).`);
   const quota = await checkQuota(String(user._id), head.size - artifact.size);
   if (!quota.ok) return fail(quota.message);
+  const contentMatch = contentMatchesFormat(await readStoredHead(key, 64), contentType);
+  if (contentMatch === false) {
+    return fail(
+      `Uploaded content does not look like a valid ${filename.slice(filename.lastIndexOf(".") + 1) || "file"} file.`,
+    );
+  }
 
   // Remove the previous object only when the replacement lives at a new key.
   if (artifact.storageKey !== key) {

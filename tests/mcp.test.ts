@@ -1,5 +1,5 @@
 import { afterAll, describe, expect, test } from "vitest";
-import { BASE, closeDb, connectDb, seedUser, collection } from "./helpers";
+import { BASE, closeDb, connectDb, JPEG_BYTES, seedUser, collection } from "./helpers";
 
 // MCP route regression: stateless JSON-mode transport over the web-standard
 // StreamableHTTPServerTransport (SDK ≥1.32). Guards the initialize/tool-call path.
@@ -117,14 +117,54 @@ describe("mcp route (stateless, JSON mode)", () => {
     expect(typeof artifactId).toBe("string");
     expect(uploaded.artifact?.filename).toBe("smoke pixel.png");
 
+    // Regression (GH #2): display name without an extension must not affect
+    // format validation — extension contract binds to `filename` only.
+    const labelled = JSON.parse(
+      resultText(
+        await rpc(seeded.key, {
+          jsonrpc: "2.0",
+          id: 5,
+          method: "tools/call",
+          params: {
+            name: "upload_artifact",
+            arguments: {
+              filename: "shot.jpg",
+              content_base64: JPEG_BYTES.toString("base64"),
+              name: "sign-in unavailable (mobile Safari)",
+            },
+          },
+        }),
+        5,
+      ),
+    ) as { artifact?: { artifactId?: unknown; filename?: unknown; contentType?: unknown } };
+    expect(labelled.artifact?.artifactId).toBeTruthy();
+    expect(labelled.artifact?.filename).toBe("sign-in unavailable (mobile Safari)");
+    expect(labelled.artifact?.contentType).toBe("image/jpeg");
+
+    // Content lying about its extension is rejected by magic-byte sniffing.
+    const fakePng = await rpc(seeded.key, {
+      jsonrpc: "2.0",
+      id: 6,
+      method: "tools/call",
+      params: {
+        name: "upload_artifact",
+        arguments: {
+          filename: "evil.png",
+          content_base64: Buffer.from("<!doctype html><html></html>").toString("base64"),
+        },
+      },
+    });
+    const fakeText = resultText(fakePng, 6);
+    expect(fakeText).toContain("UNSUPPORTED_FORMAT");
+
     const listText = resultText(
       await rpc(seeded.key, {
         jsonrpc: "2.0",
-        id: 4,
+        id: 7,
         method: "tools/call",
         params: { name: "list_artifacts", arguments: {} },
       }),
-      4,
+      7,
     );
     const listed = JSON.parse(listText) as { items?: { artifactId?: unknown }[] };
     expect(Array.isArray(listed.items)).toBe(true);
@@ -132,12 +172,17 @@ describe("mcp route (stateless, JSON mode)", () => {
       (listed.items ?? []).some((a) => a.artifactId === artifactId),
       "uploaded artifact must appear in list_artifacts",
     ).toBe(true);
+    expect(
+      (listed.items ?? []).some((a) => a.artifactId === labelled.artifact?.artifactId),
+      "display-labelled artifact must appear in list_artifacts",
+    ).toBe(true);
 
     // Cleanup seeded rows (test DB is ephemeral, but keep it tidy anyway).
     await connectDb();
     await collection("tokens").deleteMany({ tokenId: seeded.tokenId });
     await collection("users").deleteMany({ email: seeded.email });
     await collection("artifacts").deleteMany({ artifactId: artifactId });
+    await collection("artifacts").deleteMany({ artifactId: labelled.artifact?.artifactId });
   });
 
   test("unauthorized without token", async () => {

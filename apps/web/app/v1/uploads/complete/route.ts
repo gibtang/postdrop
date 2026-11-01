@@ -2,9 +2,9 @@ import type { NextRequest } from "next/server";
 import { connectDb } from "@/lib/db";
 import { Artifact } from "@/lib/models";
 import { requireToken } from "@/lib/token-auth";
-import { apiError, apiJson, checkQuota, serializeArtifact } from "@/lib/api";
+import { apiError, apiJson, checkQuota, readStoredHead, serializeArtifact } from "@/lib/api";
 import { getStorage } from "@/lib/storage/index";
-import { mimeForFilename, maxArtifactBytes } from "@/lib/formats";
+import { contentMatchesFormat, mimeForFilename, maxArtifactBytes } from "@/lib/formats";
 import { recordEvent } from "@/lib/events";
 
 const KEY_PATTERN = /^artifacts\/(art_[0-9a-f]{32})\/([A-Za-z0-9._-]{1,200})$/;
@@ -48,6 +48,14 @@ export async function POST(req: NextRequest) {
   }
   const quota = await checkQuota(token.userId, head.size);
   if (!quota.ok) return apiError(quota.status, quota.code, quota.message);
+  const contentMatch = contentMatchesFormat(await readStoredHead(key, 64), contentType);
+  if (contentMatch === false) {
+    return apiError(
+      422,
+      "UNSUPPORTED_FORMAT",
+      `Uploaded content does not look like a valid ${filename.slice(filename.lastIndexOf(".") + 1) || "file"} file.`,
+    );
+  }
 
   const artifactId = match[1];
   const now = new Date();

@@ -14,6 +14,7 @@ import {
   serializeShareLink,
 } from "@/lib/api";
 import { getStorage } from "@/lib/storage/index";
+import { extensionForMime, mimeForFilename } from "@/lib/formats";
 import { c32hex } from "@/lib/ids";
 import { recordEvent } from "@/lib/events";
 
@@ -84,7 +85,10 @@ async function listArtifactsInternal(
 
 function fetchArtifactBytes(
   url: string,
-): Promise<{ ok: true; bytes: Buffer; filename: string } | { ok: false; status: number; code: string; message: string }> {
+): Promise<
+  | { ok: true; bytes: Buffer; filename: string; contentType: string | null }
+  | { ok: false; status: number; code: string; message: string }
+> {
   return (async () => {
     const parsed = new URL(url);
     if (parsed.protocol !== "https:") {
@@ -124,7 +128,12 @@ function fetchArtifactBytes(
       chunks.push(value);
     }
     const filename = parsed.pathname.split("/").pop() ?? "";
-    return { ok: true, bytes: Buffer.concat(chunks.map((c) => Buffer.from(c))), filename };
+    return {
+      ok: true,
+      bytes: Buffer.concat(chunks.map((c) => Buffer.from(c))),
+      filename,
+      contentType: res.headers.get("content-type"),
+    };
   })();
 }
 
@@ -145,10 +154,14 @@ function buildServer(userId: string): McpServer {
     },
     async ({ filename, content_base64, name }) => {
       const bytes = Buffer.from(content_base64, "base64");
-      // REST contract: `name` replaces the stored filename when provided;
-      // format derives from that merged name (CLI pre-appends an extension).
-      const merged = typeof name === "string" && name.trim() !== "" ? name.trim() : filename;
-      const result = await createArtifactFromBytes(userId, bytes, merged);
+      // Extension contract binds to the wire filename; `name` is a display
+      // label stored verbatim and never validated.
+      const result = await createArtifactFromBytes(
+        userId,
+        bytes,
+        filename,
+        typeof name === "string" && name.trim() !== "" ? { storedFilename: name.trim() } : undefined,
+      );
       if (!result.ok) {
         const detail = (await result.res.json().catch(() => null)) as {
           error?: { code?: unknown; message?: unknown };
@@ -170,9 +183,17 @@ function buildServer(userId: string): McpServer {
     async ({ url, name }) => {
       const fetched = await fetchArtifactBytes(url);
       if (!fetched.ok) return errorResult(fetched.status, fetched.code, fetched.message);
-      // REST contract: `name` replaces the fetched filename when provided.
-      const merged = typeof name === "string" && name.trim() !== "" ? name.trim() : fetched.filename;
-      const result = await createArtifactFromBytes(userId, fetched.bytes, merged);
+      // Extension contract comes from the response Content-Type when the URL
+      // path lacks a renderable extension; `name` stays display-only.
+      const derived = fetched.contentType ? extensionForMime(fetched.contentType.split(";")[0].trim()) : null;
+      const base = fetched.filename;
+      const wireFilename = base !== "" && mimeForFilename(base) !== null ? base : `${base || "download"}${derived ? `.${derived}` : ""}`;
+      const result = await createArtifactFromBytes(
+        userId,
+        fetched.bytes,
+        wireFilename,
+        typeof name === "string" && name.trim() !== "" ? { storedFilename: name.trim() } : undefined,
+      );
       if (!result.ok) {
         const detail = (await result.res.json().catch(() => null)) as {
           error?: { code?: unknown; message?: unknown };

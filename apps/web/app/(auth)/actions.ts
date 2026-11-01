@@ -6,6 +6,8 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { signIn } from "@/auth";
+import { connectDb } from "@/lib/db";
+import { requireUser } from "@/lib/auth-user";
 import {
   createUserWithPassword,
   requestPasswordReset,
@@ -62,6 +64,21 @@ export async function googleSignInAction(): Promise<void> {
     }
     throw err;
   }
+}
+
+/** Links Google to the currently signed-in Postdrop user. */
+export async function linkGoogleAction(): Promise<void> {
+  const user = await requireUser();
+  if (!user) redirect("/login?link_google=1");
+
+  const mongoose = await connectDb();
+  const existing = await mongoose.connection.db!.collection("accounts").findOne(
+    { userId: user._id, provider: "google" },
+    { projection: { _id: 1 } },
+  );
+  if (existing) redirect("/dashboard/settings?google=already-linked");
+
+  await signIn("google", { redirectTo: "/dashboard/settings?google=linked" });
 }
 
 export async function signupAction(_prev: FormState, formData: FormData): Promise<FormState> {

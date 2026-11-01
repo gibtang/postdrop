@@ -20,6 +20,7 @@ import {
   storageFileCount,
   makeKey,
   PNG_BYTES,
+  JPEG_BYTES,
   pngBytesAlt,
   pdfBytes,
   txtBytes,
@@ -175,6 +176,26 @@ describe("format rejection", () => {
     });
     expect(res.status).toBe(422);
     expect((await json<ApiError>(res)).error.code).toBe("UNSUPPORTED_FORMAT");
+  });
+
+  it("display name without extension → accepted, stored as label (GH #2)", async () => {
+    const res = await upload(aliceKey, JPEG_BYTES, {
+      filename: "hotel-like.jpg",
+      contentType: "image/jpeg",
+      name: "hotel-like.co sign-in unavailable (mobile Safari)",
+    });
+    expect(res.status).toBe(201);
+    const { artifact } = await json<{ artifact: Artifact }>(res);
+    expect(artifact.contentType).toBe("image/jpeg");
+    expect(artifact.filename).toBe("hotel-like.co sign-in unavailable (mobile Safari)");
+  });
+
+  it("content lying about its extension (HTML as .png) → 422 UNSUPPORTED_FORMAT", async () => {
+    const res = await upload(aliceKey, HTML_BYTES, { filename: "evil.png", contentType: "image/png" });
+    expect(res.status).toBe(422);
+    const body = await json<ApiError>(res);
+    expect(body.error.code).toBe("UNSUPPORTED_FORMAT");
+    expect(body.error.message).toContain("png");
   });
 });
 

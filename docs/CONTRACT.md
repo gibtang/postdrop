@@ -25,6 +25,7 @@ Frozen integration contract for the artifact-sharing service (post-pivot, 2026-1
 ## Invariants
 
 - Formats: strict whitelist (`lib/formats.ts`); non-renderable → `422 UNSUPPORTED_FORMAT` listing allowed extensions. HTML/SVG (+all raw share content) served with `Content-Security-Policy: sandbox`, `Cache-Control: private, no-store`, `nosniff`.
+- Filename contract: the **wire filename** (multipart `file.name` / MCP `filename`) carries the extension contract and is magic-byte-sniffed on upload — HTML named `.png` → `422 UNSUPPORTED_FORMAT`. The optional display `name` field is stored verbatim as the artifact label and **never affects validation**.
 - Limits: `MAX_ARTIFACT_BYTES` (default 5 MB) → `413 FILE_TOO_LARGE`; `QUOTA_BYTES` (default 500 MB, sum of owned artifact sizes) → `422 QUOTA_EXCEEDED`. 60 uploads/min/token → `429`.
 - Uploads >4.5 MB must use presign (ADR 0011): `POST /v1/uploads/presign` → client PUT → `POST /v1/uploads/complete`. Requires `STORAGE_DRIVER=s3`; disk driver answers `501 PRESIGN_UNAVAILABLE`.
 - Dead share links (expired/revoked/artifact deleted) → uniform 404 on viewer + raw, no distinction.

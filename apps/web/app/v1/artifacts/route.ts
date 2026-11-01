@@ -86,16 +86,19 @@ export async function POST(req: NextRequest) {
     return apiError(400, "BAD_REQUEST", "Missing file field");
   }
   const nameField = form.get("name");
-  const filename = typeof nameField === "string" && nameField !== "" ? nameField : file.name;
+  const mergedName = typeof nameField === "string" && nameField !== "" ? nameField : undefined;
 
-  // Fail fast on format/size/quota before reading storage.
-  const format = checkUploadFormat(filename, file.size);
+  // Fail fast on format/size/quota before reading storage. The multipart
+  // filename is the wire contract; `name` is display-only metadata.
+  const format = checkUploadFormat(file.name, file.size);
   if (!format.ok) return apiError(format.status, format.code, format.message);
   const quota = await checkQuota(token.userId, file.size);
   if (!quota.ok) return apiError(quota.status, quota.code, quota.message);
 
   const bytes = Buffer.from(await file.arrayBuffer());
-  const result = await createArtifactFromBytes(token.userId, bytes, filename);
+  const result = await createArtifactFromBytes(token.userId, bytes, file.name, {
+    storedFilename: mergedName,
+  });
   if (!result.ok) return result.res;
   return apiJson(201, { artifact: serializeArtifact(result.artifact) });
 }

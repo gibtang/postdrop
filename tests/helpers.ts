@@ -116,6 +116,12 @@ export const PNG_BYTES = Buffer.from(
   "base64",
 );
 
+/** Real 1x1 JPEG (baseline, ffd8ff header). */
+export const JPEG_BYTES = Buffer.from(
+  "/9j/4AAQSkZJRgABAQEAYABgAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/wAALCAABAAEBAREA/8QAFAABAAAAAAAAAAAAAAAAAAAACf/EABQQAQAAAAAAAAAAAAAAAAAAAAD/2gAIAQEAAD8AKp//2Q==",
+  "base64",
+);
+
 /** Structurally minimal but valid-header PDF. */
 export function pdfBytes(): Buffer {
   return Buffer.concat([
