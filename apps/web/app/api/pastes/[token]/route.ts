@@ -3,11 +3,12 @@ import { connectDb } from "@/lib/db";
 import { apiError } from "@/lib/http";
 import { fetchAndBurnPaste } from "@/lib/pastes";
 import { sha256Hex } from "@/lib/crypto";
+import { withApiErrors } from "@/lib/api-errors";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-export async function GET(
+export const GET = withApiErrors("api/pastes/[token]", async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ token: string }> },
 ) {
@@ -33,4 +34,4 @@ export async function GET(
     ciphertext: result.paste.ciphertextB64,
     expiresAt: result.paste.expiresAt,
   });
-}
+});

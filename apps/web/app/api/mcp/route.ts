@@ -17,6 +17,7 @@ import { getStorage } from "@/lib/storage/index";
 import { extensionForMime, mimeForFilename } from "@/lib/formats";
 import { c32hex } from "@/lib/ids";
 import { recordEvent } from "@/lib/events";
+import { withApiErrors } from "@/lib/api-errors";
 
 function errorResult(status: number, code: string, message: string) {
   return {
@@ -295,7 +296,7 @@ function buildServer(userId: string): McpServer {
   return server;
 }
 
-export async function POST(req: NextRequest) {
+export const POST = withApiErrors("api/mcp", async function POST(req: NextRequest) {
   await connectDb();
   const token = await requireToken(req);
   if (!token) return apiError(401, "UNAUTHORIZED", "A valid Postdrop API key is required");
@@ -324,7 +325,7 @@ export async function POST(req: NextRequest) {
     await transport.close().catch(() => {});
     await server.close().catch(() => {});
   }
-}
+});
 
 export async function GET() {
   return apiJson(405, {
