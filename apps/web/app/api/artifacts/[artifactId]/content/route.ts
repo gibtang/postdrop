@@ -4,6 +4,7 @@ import { connectDb } from "@/lib/db";
 import { Artifact } from "@/lib/models";
 import { shareHeaders } from "@/lib/api";
 import { getStorage } from "@/lib/storage/index";
+import { withApiErrors } from "@/lib/api-errors";
 
 /**
  * Session-authed content route for dashboard previews. No bearer token
@@ -11,7 +12,9 @@ import { getStorage } from "@/lib/storage/index";
  * enforced here, and bytes are served with the same sandbox headers as the
  * public share route.
  */
-export async function GET(_req: NextRequest, { params }: { params: Promise<{ artifactId: string }> }) {
+export const GET = withApiErrors(
+  "api/artifacts/[artifactId]/content",
+  async function GET(_req: NextRequest, { params }: { params: Promise<{ artifactId: string }> }) {
   const session = await auth();
   const userId = session?.user?.id;
   if (!userId) {
@@ -25,4 +28,5 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ art
   }
   const stream = await getStorage().getStream(artifact.storageKey);
   return new Response(stream, { headers: shareHeaders(artifact.contentType, artifact.filename) });
-}
+  },
+);

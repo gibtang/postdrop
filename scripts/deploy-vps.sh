@@ -58,6 +58,12 @@ services:
       - NEXT_PUBLIC_POSTHOG_KEY=$NEXT_PUBLIC_POSTHOG_KEY
       - NEXT_PUBLIC_POSTHOG_HOST=${NEXT_PUBLIC_POSTHOG_HOST:-https://us.i.posthog.com}
       - GA_MEASUREMENT_ID=$GA_MEASUREMENT_ID
+      # Error alerting: set these in the deploy environment on the VPS
+      # (secrets.env / secrets-b2.env are sourced above).
+      - SENTRY_DSN=${SENTRY_DSN:-}
+      - NEXT_PUBLIC_SENTRY_DSN=${NEXT_PUBLIC_SENTRY_DSN:-}
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
+      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID:-}
     networks:
       - default
       - coolify

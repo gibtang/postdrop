@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { connectDb } from "@/lib/db";
 import { apiError } from "@/lib/http";
 import { createPaste, MAX_CIPHERTEXT_BYTES, MAX_FILE_BYTES } from "@/lib/pastes";
+import { withApiErrors } from "@/lib/api-errors";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -53,7 +54,7 @@ function decodeBase64(value: unknown): Buffer | null {
   }
 }
 
-export async function POST(req: NextRequest) {
+export const POST = withApiErrors("api/pastes", async function POST(req: NextRequest) {
   const ip = clientIp(req);
   if (rateLimited(ip)) {
     return apiError(429, "RATE_LIMITED", "Too many secrets created. Try again later.");
@@ -113,4 +114,4 @@ export async function POST(req: NextRequest) {
   });
 
   return NextResponse.json({ token: created.token, expiresAt: created.expiresAt.toISOString() });
-}
+});
