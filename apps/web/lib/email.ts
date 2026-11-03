@@ -32,6 +32,11 @@ async function sendEmail(params: {
   html: string;
   text: string;
 }): Promise<boolean> {
+  /**
+   * SES configuration set (eu-north-1) that publishes send/delivery/open/
+   * click/bounce/complaint metrics to CloudWatch (dimensions: app, type).
+   */
+  const SES_CONFIGURATION_SET = "postdrop-transactional";
   if (!process.env.SES_ACCESS_KEY_ID) {
     console.error("email: SES_ACCESS_KEY_ID not configured; skipping send");
     return false;
@@ -41,6 +46,11 @@ async function sendEmail(params: {
       new SendEmailCommand({
         FromEmailAddress: `Postdrop <${mailFrom()}>`,
         Destination: { ToAddresses: [params.to] },
+        ConfigurationSetName: SES_CONFIGURATION_SET,
+        EmailTags: [
+          { Name: "app", Value: "postdrop" },
+          { Name: "type", Value: params.subject.toLowerCase().includes("reset") ? "password_reset" : "email_verification" },
+        ],
         Content: {
           Simple: {
             Subject: { Data: params.subject, Charset: "UTF-8" },
