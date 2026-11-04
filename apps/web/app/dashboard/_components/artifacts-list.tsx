@@ -77,7 +77,11 @@ function ArtifactRow({ artifact }: { artifact: ArtifactSummary }) {
       </div>
 
       <Dialog open={openDialog === "preview"} onOpenChange={(open) => !open && setOpenDialog(null)}>
-        <DialogContent title={artifact.filename} description={`${typeLabel(artifact.contentType)} · ${formatBytes(artifact.size)}`} className="max-w-2xl">
+        <DialogContent
+          title={artifact.filename}
+          description={`${typeLabel(artifact.contentType)} · ${formatBytes(artifact.size)}`}
+          className="flex h-[20vh] w-[20vw] max-w-none flex-col overflow-hidden [&>div]:min-h-0 [&>div]:flex-1 [&>div]:overflow-auto [&_iframe]:h-full [&_img]:max-h-full [&_pre]:max-h-full [&_video]:max-h-full"
+        >
           <PreviewContent
             contentType={artifact.contentType}
             filename={artifact.filename}
