@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import { Toaster } from "sonner";
 import { Analytics } from "./analytics";
+import { ownerAnalyticsLoaderScript } from "../lib/analytics-optout";
 import "./globals.css";
 
 
@@ -27,14 +28,9 @@ export default function RootLayout({
         <Toaster position="top-right" richColors />
         <Analytics />
         {gaId && (
-          <>
-            <script async src={`https://www.googletagmanager.com/gtag/js?id=${gaId}`} />
-            <script
-              dangerouslySetInnerHTML={{
-                __html: `window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config','${gaId}');`,
-              }}
-            />
-          </>
+          // Owner opt-out loader: injects GA + config only when not opted out;
+          // an armed visit emits zero GA requests (sets ga-disable-<id>).
+          <script dangerouslySetInnerHTML={{ __html: ownerAnalyticsLoaderScript(gaId) }} />
         )}
       </body>
     </html>
