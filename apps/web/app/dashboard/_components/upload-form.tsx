@@ -8,10 +8,12 @@ import { Button } from "@/components/button";
 import {
   completeEditAction,
   completeUploadAction,
+  createShareLinkAction,
   editArtifactAction,
   requestPresignAction,
   uploadArtifactAction,
 } from "@/lib/artifact-actions";
+import { CopyButton } from "./copy-button";
 
 /**
  * Files at or below this size go through the server action (multipart);
@@ -36,9 +38,11 @@ export function UploadForm({
   const router = useRouter();
   const inputRef = React.useRef<HTMLInputElement>(null);
   const [busy, setBusy] = React.useState<string | null>(null);
+  const [newLink, setNewLink] = React.useState<{ url: string; filename: string } | null>(null);
 
   async function handleFile(file: File) {
     const replacing = artifactId !== undefined;
+    let uploadedArtifactId: string | null = null;
     try {
       if (file.size <= INLINE_UPLOAD_LIMIT) {
         setBusy(replacing ? "Replacing…" : "Uploading…");
@@ -52,6 +56,7 @@ export function UploadForm({
           toast.error(result.error);
           return;
         }
+        if (!replacing) uploadedArtifactId = result.artifact.artifactId;
       } else {
         setBusy("Requesting upload URL…");
         const presign = await requestPresignAction({ filename: file.name, size: file.size });
@@ -77,8 +82,22 @@ export function UploadForm({
           toast.error(complete.error);
           return;
         }
+        if (!replacing) uploadedArtifactId = complete.artifact.artifactId;
       }
-      toast.success(replacing ? "File replaced." : "Artifact uploaded.");
+      if (uploadedArtifactId !== null) {
+        // New dashboard uploads auto-generate a never-expiring share link so
+        // the artifact is shareable the moment it lands.
+        const link = await createShareLinkAction({ artifactId: uploadedArtifactId, expiresInDays: null });
+        if (link.ok) {
+          setNewLink({ url: link.link.url, filename: file.name });
+          toast.success("Artifact uploaded — share link ready.");
+        } else {
+          toast.success("Artifact uploaded.");
+          toast.error(`Share link could not be created: ${link.error}`);
+        }
+      } else {
+        toast.success(replacing ? "File replaced." : "Artifact uploaded.");
+      }
       router.refresh();
       onDone?.();
     } catch {
@@ -107,6 +126,17 @@ export function UploadForm({
       <p className="text-xs text-[var(--text-muted)]">
         Renderable formats only · {INLINE_UPLOAD_LIMIT / (1024 * 1024)} MB inline, larger files upload directly
       </p>
+      {newLink ? (
+        <div className="w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] p-3">
+          <p className="text-xs text-[var(--text-muted)]">
+            Share link for <span className="font-medium text-[var(--text)]">{newLink.filename}</span> · never expires
+          </p>
+          <div className="mt-1 flex items-center gap-2">
+            <code className="min-w-0 flex-1 truncate text-sm text-[var(--text)]">{newLink.url}</code>
+            <CopyButton value={newLink.url} label="Copy link" />
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

@@ -19,7 +19,7 @@ Tools:    upload_artifact, upload_artifact_from_url, list_artifacts,
 
 REST: same verbs under `/v1` (`POST /v1/artifacts`, `GET /v1/artifacts`, `PATCH /v1/artifacts/:id`, `DELETE /v1/artifacts/:id`, `POST /v1/artifacts/:id/share`, …). Errors are `{error: {code, message}}`.
 
-Share links are view-only, unguessable, and can carry an expiry. Agents and humans open the same URL.
+Share links are view-only, unguessable, and can carry an expiry. Agents and humans open the same URL. Dashboard uploads auto-create a never-expiring share link with a copyable URL the moment the file lands; use **Share…** for extra links with a custom expiry. Agents always mint links explicitly (`share_artifact` / `POST /v1/artifacts/:id/share`).
 
 ## Layout
 
