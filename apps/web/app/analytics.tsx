@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { usePathname } from "next/navigation";
 import posthog from "posthog-js";
+import { applyUrlOverride } from "../lib/analytics-optout";
 
 /**
  * Privacy-hydrated product analytics (PostHog). Anonymous by design:
@@ -16,6 +17,7 @@ export function Analytics(): null {
   useEffect(() => {
     const key = process.env.NEXT_PUBLIC_POSTHOG_KEY;
     if (!key || typeof window === "undefined") return;
+    if (applyUrlOverride()) return; // owner opt-out armed: no PostHog init
     posthog.init(key, {
       api_host: process.env.NEXT_PUBLIC_POSTHOG_HOST || "https://us.i.posthog.com",
       autocapture: false,
@@ -42,6 +44,7 @@ export function Analytics(): null {
 
   useEffect(() => {
     if (!process.env.NEXT_PUBLIC_POSTHOG_KEY || typeof window === "undefined") return;
+    if (applyUrlOverride()) return; // re-checked per SPA navigation
     posthog.capture("$pageview", {
       $current_url: window.location.origin + pathname,
       $pathname: pathname,
