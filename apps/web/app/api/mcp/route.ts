@@ -224,16 +224,22 @@ function buildServer(userId: string): McpServer {
 
   server.tool(
     "get_artifact",
-    "Get one artifact with its share links",
-    { artifactId: z.string().min(1) },
-    async ({ artifactId }) => {
+    "Get one artifact with its share links; set include_content to also return the file bytes as base64",
+    { artifactId: z.string().min(1), include_content: z.boolean().optional() },
+    async ({ artifactId, include_content }) => {
       const artifact = await Artifact.findOne({ artifactId, userId });
       if (!artifact) return errorResult(404, "NOT_FOUND", "Artifact not found");
       const links = await ShareLink.find({ artifactId }).sort({ createdAt: -1 });
-      return jsonResult({
+      const payload: Record<string, unknown> = {
         artifact: serializeArtifact(artifact),
         shareLinks: links.map(serializeShareLink),
-      });
+      };
+      if (include_content === true) {
+        const stream = await getStorage().getStream(artifact.storageKey);
+        const bytes = Buffer.from(await new Response(stream).arrayBuffer());
+        payload.content_base64 = bytes.toString("base64");
+      }
+      return jsonResult(payload);
     },
   );
 

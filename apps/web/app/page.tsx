@@ -26,7 +26,7 @@ const valueProps = [
     icon: Globe,
     title: "Share a renderable link",
     description:
-      "Every artifact gets a share link. Recipients open it in any browser and see the file rendered inline — images, PDFs, video, audio, or text. No download, no account.",
+      "Every artifact gets a share link. Recipients open it in any browser and see the file rendered inline — images, PDFs, video, audio, or text. No download required, no account.",
   },
   {
     icon: ShieldCheck,

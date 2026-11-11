@@ -661,7 +661,52 @@ describe("active content sandboxing and raw download", () => {
 });
 
 // ---------------------------------------------------------------------------
-// 12 — presign on disk driver
+// 12 — download disposition (?dl=1)
+// ---------------------------------------------------------------------------
+
+describe("download disposition (?dl=1)", () => {
+  it("viewer raw defaults to inline; ?dl=1 → attachment with filename and exact bytes", async () => {
+    const created = await json<{ artifact: Artifact }>(
+      await upload(aliceKey, PNG_BYTES, { filename: "dl-me.png", contentType: "image/png" }),
+    );
+    const { shareLink } = await json<{ shareLink: ShareLink }>(
+      await createShare(aliceKey, created.artifact.artifactId),
+    );
+
+    const inline = await fetch(`${shareLink.url}/raw`);
+    expect(inline.status).toBe(200);
+    expect(inline.headers.get("content-disposition")).toContain("inline");
+
+    const dl = await fetch(`${shareLink.url}/raw?dl=1`);
+    expect(dl.status).toBe(200);
+    const cd = dl.headers.get("content-disposition") ?? "";
+    expect(cd).toContain("attachment");
+    expect(cd).toContain("dl-me.png");
+    expect(Buffer.from(await dl.arrayBuffer()).equals(PNG_BYTES)).toBe(true);
+
+    // Any other dl value keeps inline.
+    const dlOff = await fetch(`${shareLink.url}/raw?dl=0`);
+    expect(dlOff.headers.get("content-disposition")).toContain("inline");
+  });
+
+  it("?dl=1 on expired link → 404, same as viewing", async () => {
+    const created = await json<{ artifact: Artifact }>(
+      await upload(aliceKey, txtBytes(16), { filename: "gone.txt", contentType: "text/plain" }),
+    );
+    const { shareLink } = await json<{ shareLink: ShareLink }>(
+      await createShare(aliceKey, created.artifact.artifactId),
+    );
+    // SWEEPER_DISABLED=1, so expiry is seeded at the driver level.
+    await collection("share_links").updateOne(
+      { linkId: shareLink.linkId },
+      { $set: { expiresAt: new Date(Date.now() - 1000) } },
+    );
+    expect((await fetch(`${shareLink.url}/raw?dl=1`)).status).toBe(404);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 13 — presign on disk driver
 // ---------------------------------------------------------------------------
 
 describe("presign", () => {

@@ -1,6 +1,8 @@
 import { notFound } from "next/navigation";
+import { Download } from "lucide-react";
 import { connectDb } from "@/lib/db";
 import { Artifact, ShareLink } from "@/lib/models";
+import { Button } from "@/components/button";
 import { formatBytes, typeLabel } from "@/app/dashboard/utils";
 import { PreviewContent } from "@/app/dashboard/_components/preview-content";
 
@@ -26,12 +28,20 @@ export default async function ViewerPage({ params }: { params: Promise<{ token: 
 
   return (
     <main className="mx-auto max-w-3xl px-5 py-10">
-      <header className="mb-6">
-        <p className="text-xs font-semibold uppercase tracking-wide text-[var(--accent)]">Shared with Postdrop</p>
-        <h1 className="mt-1 truncate text-xl font-semibold tracking-tight text-[var(--text)]">{artifact.filename}</h1>
-        <p className="mt-1 text-sm text-[var(--text-muted)]">
-          {typeLabel(artifact.contentType)} · {formatBytes(artifact.size)} · view-only
-        </p>
+      <header className="mb-6 flex items-start justify-between gap-4">
+        <div className="min-w-0">
+          <p className="text-xs font-semibold uppercase tracking-wide text-[var(--accent)]">Shared with Postdrop</p>
+          <h1 className="mt-1 truncate text-xl font-semibold tracking-tight text-[var(--text)]">{artifact.filename}</h1>
+          <p className="mt-1 text-sm text-[var(--text-muted)]">
+            {typeLabel(artifact.contentType)} · {formatBytes(artifact.size)} · view-only
+          </p>
+        </div>
+        <Button asChild variant="secondary" size="sm" className="shrink-0">
+          <a href={`/a/${token}/raw?dl=1`}>
+            <Download className="h-4 w-4" />
+            Download
+          </a>
+        </Button>
       </header>
       <PreviewContent
         contentType={artifact.contentType}
