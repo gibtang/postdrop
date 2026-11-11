@@ -1,4 +1,8 @@
-import { withSentryConfig } from "@sentry/nextjs";
+// `withSentryConfig` lives on the config subpath in this SDK version — the
+// package root no longer exports it (named import from the root fails at
+// config load, breaking both `next build` and the acceptance suite's
+// `next start`).
+import { withSentryConfig } from "@sentry/nextjs/config";
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
