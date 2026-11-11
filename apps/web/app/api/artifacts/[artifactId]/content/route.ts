@@ -14,7 +14,7 @@ import { withApiErrors } from "@/lib/api-errors";
  */
 export const GET = withApiErrors(
   "api/artifacts/[artifactId]/content",
-  async function GET(_req: NextRequest, { params }: { params: Promise<{ artifactId: string }> }) {
+  async function GET(req: NextRequest, { params }: { params: Promise<{ artifactId: string }> }) {
   const session = await auth();
   const userId = session?.user?.id;
   if (!userId) {
@@ -27,6 +27,7 @@ export const GET = withApiErrors(
     return new Response("Not found", { status: 404 });
   }
   const stream = await getStorage().getStream(artifact.storageKey);
-  return new Response(stream, { headers: shareHeaders(artifact.contentType, artifact.filename) });
+  const disposition = req.nextUrl.searchParams.get("dl") === "1" ? "attachment" : "inline";
+  return new Response(stream, { headers: shareHeaders(artifact.contentType, artifact.filename, disposition) });
   },
 );

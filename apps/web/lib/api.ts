@@ -76,10 +76,14 @@ export function isShareLinkLive(link: {
   return true;
 }
 
-export function shareHeaders(contentType: string, filename: string): Headers {
+export function shareHeaders(
+  contentType: string,
+  filename: string,
+  disposition: "inline" | "attachment" = "inline",
+): Headers {
   const headers = new Headers({
     "Content-Type": contentType,
-    "Content-Disposition": `inline; filename="${filename.replace(/["\\]/g, "")}"`,
+    "Content-Disposition": `${disposition}; filename="${filename.replace(/["\\]/g, "")}"`,
     "Cache-Control": "private, no-store",
     "X-Content-Type-Options": "nosniff",
   });

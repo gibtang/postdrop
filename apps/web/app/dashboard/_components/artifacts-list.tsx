@@ -3,7 +3,7 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Eye, Pencil, Share2, Trash2 } from "lucide-react";
+import { Download, Eye, Pencil, Share2, Trash2 } from "lucide-react";
 import { Badge } from "@/components/badge";
 import { Button } from "@/components/button";
 import { Card } from "@/components/card";
@@ -82,6 +82,14 @@ function ArtifactRow({ artifact }: { artifact: ArtifactSummary }) {
           description={`${typeLabel(artifact.contentType)} · ${formatBytes(artifact.size)}`}
           className="flex h-[20vh] w-[20vw] max-w-none flex-col overflow-hidden [&>div]:min-h-0 [&>div]:flex-1 [&>div]:overflow-auto [&_iframe]:h-full [&_img]:max-h-full [&_pre]:max-h-full [&_video]:max-h-full"
         >
+          <div className="mb-2 flex justify-end">
+            <Button asChild variant="secondary" size="sm">
+              <a href={`/api/artifacts/${artifact.artifactId}/content?dl=1`}>
+                <Download className="h-3.5 w-3.5" />
+                Download
+              </a>
+            </Button>
+          </div>
           <PreviewContent
             contentType={artifact.contentType}
             filename={artifact.filename}

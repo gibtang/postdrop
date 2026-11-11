@@ -36,6 +36,10 @@ _Avoid_: purged, deleted, revoked link, dead
 The public page a Share link opens, showing the Artifact inline.
 _Avoid_: link page, download page, drop page, preview
 
+**Download**:
+Retrieving an Artifact's bytes to keep outside Postdrop, via an explicit action: a Viewer or Dashboard download, or an agent fetching content with its Token. Distinct from viewing, which renders content inline. A Download never changes the Artifact or its Share links.
+_Avoid_: save, export, download link
+
 **Sandboxed content**:
 Active formats (HTML, SVG) served inside the Viewer in a way that isolates them from Postdrop's own origin.
 _Avoid_: trusted content, raw HTML

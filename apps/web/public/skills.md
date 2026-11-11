@@ -35,7 +35,7 @@ Authorization: Bearer pd_live_<64 hex>
 | `upload_artifact` | `filename`, `content_base64`, `name?` | ≤5 MB; extension + content check run on `filename`; `name` is a display label (any text, no extension needed) |
 | `upload_artifact_from_url` | `url` (https), `name?` | server fetches ≤5 MB |
 | `list_artifacts` | `limit?` (1–200), `cursor?` | newest first → `{items, nextCursor}` |
-| `get_artifact` | `artifactId` | artifact + its share links |
+| `get_artifact` | `artifactId`, `include_content?` | artifact + its share links; `include_content: true` also returns `content_base64` (full file, ≤5 MB) |
 | `share_artifact` | `artifactId`, `expiresAt?` (ISO) | returns `{shareLink: {url, …}}` — give this URL to the human |
 | `unshare_artifact` | `linkId` | revokes one share link |
 | `delete_artifact` | `artifactId` | deletes file + share links |

@@ -185,6 +185,63 @@ describe("mcp route (stateless, JSON mode)", () => {
     await collection("artifacts").deleteMany({ artifactId: labelled.artifact?.artifactId });
   });
 
+  test("get_artifact returns content only with include_content", async () => {
+    await connectDb();
+    const seeded = await seedUser(`mcp-content-${Date.now()}@test.local`, "MCP Content");
+
+    const uploadText = resultText(
+      await rpc(seeded.key, {
+        jsonrpc: "2.0",
+        id: 1,
+        method: "tools/call",
+        params: {
+          name: "upload_artifact",
+          arguments: { filename: "roundtrip.jpg", content_base64: JPEG_BYTES.toString("base64") },
+        },
+      }),
+      1,
+    );
+    const uploaded = JSON.parse(uploadText) as { artifact?: { artifactId?: unknown } };
+    const artifactId = uploaded.artifact?.artifactId;
+    expect(typeof artifactId).toBe("string");
+
+    // Default: metadata + share links only — no content_base64.
+    const metaText = resultText(
+      await rpc(seeded.key, {
+        jsonrpc: "2.0",
+        id: 2,
+        method: "tools/call",
+        params: { name: "get_artifact", arguments: { artifactId } },
+      }),
+      2,
+    );
+    const meta = JSON.parse(metaText) as Record<string, unknown>;
+    expect("content_base64" in meta).toBe(false);
+
+    // include_content: exact bytes round-trip.
+    const contentText = resultText(
+      await rpc(seeded.key, {
+        jsonrpc: "2.0",
+        id: 3,
+        method: "tools/call",
+        params: {
+          name: "get_artifact",
+          arguments: { artifactId, include_content: true },
+        },
+      }),
+      3,
+    );
+    const content = JSON.parse(contentText) as { content_base64?: unknown };
+    expect(typeof content.content_base64).toBe("string");
+    expect(Buffer.from(content.content_base64 as string, "base64").equals(JPEG_BYTES)).toBe(true);
+
+    // Cleanup seeded rows.
+    await connectDb();
+    await collection("tokens").deleteMany({ tokenId: seeded.tokenId });
+    await collection("users").deleteMany({ email: seeded.email });
+    await collection("artifacts").deleteMany({ artifactId: artifactId });
+  });
+
   test("unauthorized without token", async () => {
     const res = await fetch(`${BASE}/api/mcp`, {
       method: "POST",

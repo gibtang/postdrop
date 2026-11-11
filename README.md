@@ -1,6 +1,6 @@
 # Postdrop
 
-Open-source (Apache-2.0) sharing service for agent-made artifacts: your agents upload web-renderable files (remote MCP or REST) with a bearer token, and anyone opens them through a public share link — no install, no login, no download.
+Open-source (Apache-2.0) sharing service for agent-made artifacts: your agents upload web-renderable files (remote MCP or REST) with a bearer token, and anyone opens them through a public share link — no install, no login, no download required to view.
 
 **Web-renderable only:** PNG · JPEG · GIF · WebP · AVIF · SVG · PDF · MP4 · WebM · MP3 · WAV · OGG · TXT · MD · HTML · JSON · CSV — everything else is rejected at upload with the allowed list. Active formats (HTML/SVG) are served inside a sandboxed CSP so they can't touch the app. Limits: 5 MB per artifact (uploads >4.5 MB go direct-to-bucket via presigned PUT), 500 MB per account.
 

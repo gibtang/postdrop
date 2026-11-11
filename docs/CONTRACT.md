@@ -29,6 +29,7 @@ Frozen integration contract for the artifact-sharing service (post-pivot, 2026-1
 - Limits: `MAX_ARTIFACT_BYTES` (default 5 MB) → `413 FILE_TOO_LARGE`; `QUOTA_BYTES` (default 500 MB, sum of owned artifact sizes) → `422 QUOTA_EXCEEDED`. 60 uploads/min/token → `429`.
 - Uploads >4.5 MB must use presign (ADR 0011): `POST /v1/uploads/presign` → client PUT → `POST /v1/uploads/complete`. Requires `STORAGE_DRIVER=s3`; disk driver answers `501 PRESIGN_UNAVAILABLE`.
 - Dead share links (expired/revoked/artifact deleted) → uniform 404 on viewer + raw, no distinction.
+- Download: `?dl=1` on `/a/[token]/raw` (public viewer) or the dashboard content route flips `Content-Disposition` from `inline` to `attachment`; any other value keeps `inline`. MCP `get_artifact` with `include_content: true` returns `content_base64` (full bytes, up to `MAX_ARTIFACT_BYTES`, base64-inflated ~4/3).
 - Foreign resources → 404 (no existence leak). Errors: `{error: {code, message}}`.
 
 ## Env contract (`apps/web/.env.example`)
