@@ -689,6 +689,25 @@ describe("download disposition (?dl=1)", () => {
     expect(dlOff.headers.get("content-disposition")).toContain("inline");
   });
 
+  it("non-ASCII filename → 200 both ways, RFC 5987 filename* on download", async () => {
+    const created = await json<{ artifact: Artifact }>(
+      await upload(aliceKey, txtBytes(16), { filename: "orders (POs → BC SO).csv", contentType: "text/csv" }),
+    );
+    const { shareLink } = await json<{ shareLink: ShareLink }>(
+      await createShare(aliceKey, created.artifact.artifactId),
+    );
+    const inline = await fetch(`${shareLink.url}/raw`);
+    expect(inline.status).toBe(200);
+    expect(inline.headers.get("content-disposition")).toContain("inline");
+
+    const dl = await fetch(`${shareLink.url}/raw?dl=1`);
+    expect(dl.status).toBe(200);
+    const cd = dl.headers.get("content-disposition") ?? "";
+    expect(cd).toContain("attachment");
+    expect(cd).toContain("filename*=UTF-8''");
+    expect(decodeURIComponent(cd.split("filename*=UTF-8''")[1])).toContain("POs → BC SO");
+  });
+
   it("?dl=1 on expired link → 404, same as viewing", async () => {
     const created = await json<{ artifact: Artifact }>(
       await upload(aliceKey, txtBytes(16), { filename: "gone.txt", contentType: "text/plain" }),

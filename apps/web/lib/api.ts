@@ -81,9 +81,17 @@ export function shareHeaders(
   filename: string,
   disposition: "inline" | "attachment" = "inline",
 ): Headers {
+  // Header values must stay Latin-1: strip quotes/backslashes/CR/LF, and for
+  // non-ASCII names emit an ASCII fallback plus RFC 5987 `filename*` — a raw
+  // non-ASCII byte in Content-Disposition throws ERR_INVALID_CHAR at
+  // response time (500 on both preview and download).
+  const safe = filename.replace(/["\\\r\n]/g, "").trim() || "artifact";
+  const value = /^[\x20-\x7E]+$/.test(safe)
+    ? `${disposition}; filename="${safe}"`
+    : `${disposition}; filename="${safe.replace(/[^\x20-\x7E]/g, "_")}"; filename*=UTF-8''${encodeURIComponent(safe)}`;
   const headers = new Headers({
     "Content-Type": contentType,
-    "Content-Disposition": `${disposition}; filename="${filename.replace(/["\\]/g, "")}"`,
+    "Content-Disposition": value,
     "Cache-Control": "private, no-store",
     "X-Content-Type-Options": "nosniff",
   });
