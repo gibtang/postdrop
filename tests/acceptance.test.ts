@@ -137,6 +137,17 @@ describe("upload happy paths", () => {
     expect(await storageHasExactBytes(bytes)).toBe(true);
   });
 
+  it("non-ASCII filename → 201 persisted verbatim, bytes intact", async () => {
+    const bytes = txtBytes(24);
+    const name = "café menu (POs → BC SO) 🚀.txt";
+    const res = await upload(aliceKey, bytes, { filename: name, contentType: "text/plain" });
+    expect(res.status).toBe(201);
+    const { artifact } = await json<{ artifact: Artifact }>(res);
+    expect(artifact.filename).toBe(name);
+    expect(artifact.contentType).toBe("text/plain");
+    expect(await storageHasExactBytes(bytes)).toBe(true);
+  });
+
   it("upload with no auth header → 401", async () => {
     const res = await fetch(`${BASE}/v1/artifacts`, { method: "POST", body: new FormData() });
     expect(res.status).toBe(401);
@@ -318,6 +329,29 @@ describe("artifact edit (PATCH)", () => {
     expect(artifact.contentType).toBe("application/pdf");
     expect(artifact.size).toBe(bytes.length);
     expect(await storageHasExactBytes(bytes)).toBe(true);
+  });
+
+  it("PATCH to non-ASCII filename → persisted, raw serves 200 with filename*", async () => {
+    const created = await json<{ artifact: Artifact }>(
+      await upload(aliceKey, PNG_BYTES, { filename: "ascii.png", contentType: "image/png" }),
+    );
+    const renamed = "rapport（注文 → 発注）.png";
+    const res = await patchArtifact(aliceKey, created.artifact.artifactId, PNG_BYTES, {
+      filename: renamed,
+      contentType: "image/png",
+    });
+    expect(res.status).toBe(200);
+    const { artifact } = await json<{ artifact: Artifact }>(res);
+    expect(artifact.filename).toBe(renamed);
+
+    const { shareLink } = await json<{ shareLink: ShareLink }>(
+      await createShare(aliceKey, created.artifact.artifactId),
+    );
+    const raw = await fetch(`${shareLink.url}/raw`);
+    expect(raw.status).toBe(200);
+    const cd = raw.headers.get("content-disposition") ?? "";
+    expect(cd).toContain("filename*=UTF-8''");
+    expect(decodeURIComponent(cd.split("filename*=UTF-8''")[1])).toBe(renamed);
   });
 
   it("PATCH foreign artifact → 404", async () => {

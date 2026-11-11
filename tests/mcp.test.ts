@@ -196,14 +196,18 @@ describe("mcp route (stateless, JSON mode)", () => {
         method: "tools/call",
         params: {
           name: "upload_artifact",
-          arguments: { filename: "roundtrip.jpg", content_base64: JPEG_BYTES.toString("base64") },
+          arguments: {
+            filename: "ründtrip 📸 表.jpg",
+            content_base64: JPEG_BYTES.toString("base64"),
+          },
         },
       }),
       1,
     );
-    const uploaded = JSON.parse(uploadText) as { artifact?: { artifactId?: unknown } };
+    const uploaded = JSON.parse(uploadText) as { artifact?: { artifactId?: unknown; filename?: unknown } };
     const artifactId = uploaded.artifact?.artifactId;
     expect(typeof artifactId).toBe("string");
+    expect(uploaded.artifact?.filename).toBe("ründtrip 📸 表.jpg");
 
     // Default: metadata + share links only — no content_base64.
     const metaText = resultText(
