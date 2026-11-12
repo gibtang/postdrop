@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { Artifact, ShareLink, type ArtifactDoc, type ShareLinkDoc } from "./models";
-import { contentMatchesFormat, mimeForFilename, maxArtifactBytes, quotaBytes, ACTIVE_TYPES, SANDBOX_CSP } from "./formats";
+import { contentMatchesFormat, extensionForMime, mimeForFilename, maxArtifactBytes, quotaBytes, ACTIVE_TYPES, SANDBOX_CSP } from "./formats";
 
 // Re-exported for endpoint modules that need the caps without a second import.
 export { maxArtifactBytes, quotaBytes } from "./formats";
@@ -86,14 +86,19 @@ export function shareHeaders(
   // non-ASCII byte in Content-Disposition throws ERR_INVALID_CHAR at
   // response time (500 on both preview and download).
   const safe = filename.replace(/["\\\r\n]/g, "").trim() || "artifact";
-  const value = /^[\x20-\x7E]+$/.test(safe)
-    ? `${disposition}; filename="${safe}"`
-    : `${disposition}; filename="${safe.replace(/[^\x20-\x7E]/g, "_")}"; filename*=UTF-8''${encodeURIComponent(safe)}`;
+  // The stored filename may be a display label without an extension; the
+  // download name must still carry one or OSes save extension-less files.
+  const missingExt = extensionForMime(contentType.split(";")[0].trim());
+  const withExt = mimeForFilename(safe) !== null ? safe : missingExt ? `${safe}.${missingExt}` : safe;
+  const value = /^[\x20-\x7E]+$/.test(withExt)
+    ? `${disposition}; filename="${withExt}"`
+    : `${disposition}; filename="${withExt.replace(/[^\x20-\x7E]/g, "_")}"; filename*=UTF-8''${encodeURIComponent(withExt)}`;
   const headers = new Headers({
     "Content-Type": contentType,
     "Content-Disposition": value,
     "Cache-Control": "private, no-store",
     "X-Content-Type-Options": "nosniff",
+    "Accept-Ranges": "bytes",
   });
   if (ACTIVE_TYPES.includes(contentType)) {
     headers.set("Content-Security-Policy", SANDBOX_CSP);

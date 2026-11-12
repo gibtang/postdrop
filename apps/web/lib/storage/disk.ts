@@ -40,6 +40,10 @@ export const diskStorage = {
     return Readable.toWeb(createReadStream(keyPath(key))) as ReadableStream;
   },
 
+  async getRange(key: string, start: number, end: number): Promise<ReadableStream | null> {
+    return Readable.toWeb(createReadStream(keyPath(key), { start, end })) as ReadableStream;
+  },
+
   async remove(key: string): Promise<void> {
     await unlink(keyPath(key)).catch((err: NodeJS.ErrnoException) => {
       if (err.code !== "ENOENT") throw err;

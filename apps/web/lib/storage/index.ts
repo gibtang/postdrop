@@ -8,6 +8,8 @@ export interface Storage {
     opts: { contentType?: string; contentLength?: number },
   ): Promise<void>;
   getStream(key: string): Promise<ReadableStream>;
+  /** Byte-range read for media streaming; returns null when the driver cannot serve ranges. */
+  getRange(key: string, start: number, end: number): Promise<ReadableStream | null>;
   remove(key: string): Promise<void>;
   /** Object metadata without reading the body; null when the key is absent. */
   head(key: string): Promise<{ size: number; contentType: string } | null>;

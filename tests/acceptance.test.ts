@@ -531,6 +531,52 @@ describe("share lifecycle", () => {
     expect(raw.headers.get("content-type")).toContain("image/png");
   });
 
+  it("raw serves 206 partial content with Content-Range (Safari video streaming)", async () => {
+    const { shareLink } = await json<{ shareLink: ShareLink }>(
+      await createShare(aliceKey, artifactId),
+    );
+    const res = await fetch(`${shareLink.url}/raw`, {
+      headers: { range: "bytes=4-19" },
+    });
+    expect(res.status).toBe(206);
+    expect(res.headers.get("content-range")).toBe(`bytes 4-19/${PNG_BYTES.length}`);
+    expect(res.headers.get("accept-ranges")).toBe("bytes");
+    const body = Buffer.from(await res.arrayBuffer());
+    expect(body.length).toBe(16);
+    expect(body.equals(PNG_BYTES.subarray(4, 20))).toBe(true);
+
+    // suffix range: last 8 bytes
+    const suffix = await fetch(`${shareLink.url}/raw`, { headers: { range: "bytes=-8" } });
+    expect(suffix.status).toBe(206);
+    expect(Buffer.from(await suffix.arrayBuffer()).equals(PNG_BYTES.subarray(-8))).toBe(true);
+
+    // out-of-bounds → 416
+    const oob = await fetch(`${shareLink.url}/raw`, { headers: { range: `bytes=${PNG_BYTES.length + 5}-` } });
+    expect(oob.status).toBe(416);
+    expect(oob.headers.get("content-range")).toBe(`bytes */${PNG_BYTES.length}`);
+  });
+
+  it("raw download name carries a canonical extension when the stored label lacks one", async () => {
+    const created = await json<{ artifact: Artifact }>(
+      await upload(aliceKey, JPEG_BYTES, {
+        filename: "review.jpg",
+        contentType: "image/jpeg",
+        name: "Stork Ticker walkthrough (private review)",
+      }),
+    );
+    const { shareLink } = await json<{ shareLink: ShareLink }>(
+      await createShare(aliceKey, created.artifact.artifactId),
+    );
+    const raw = await fetch(`${shareLink.url}/raw`);
+    const cd = raw.headers.get("content-disposition") ?? "";
+    expect(cd).toContain('filename="Stork Ticker walkthrough (private review).jpg"');
+    // cleanup
+    await fetch(`${BASE}/v1/artifacts/${created.artifact.artifactId}`, {
+      method: "DELETE",
+      headers: bearer(aliceKey),
+    });
+  });
+
   it("unshare (DELETE /v1/share/:linkId) → 204 then viewer+raw 404", async () => {
     const { shareLink } = await json<{ shareLink: ShareLink }>(
       await createShare(aliceKey, artifactId),

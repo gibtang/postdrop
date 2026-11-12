@@ -59,6 +59,14 @@ export const s3Storage = {
     return Readable.toWeb(res.Body as Readable) as ReadableStream;
   },
 
+  async getRange(key: string, start: number, end: number): Promise<ReadableStream | null> {
+    const res = await s3().send(
+      new GetObjectCommand({ Bucket: bucket(), Key: key, Range: `bytes=${start}-${end}` }),
+    );
+    if (!res.Body) return null;
+    return Readable.toWeb(res.Body as Readable) as ReadableStream;
+  },
+
   async remove(key: string): Promise<void> {
     await s3().send(new DeleteObjectCommand({ Bucket: bucket(), Key: key }));
   },
