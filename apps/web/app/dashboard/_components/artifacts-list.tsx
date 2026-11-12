@@ -3,7 +3,7 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Download, Eye, Pencil, Share2, Trash2 } from "lucide-react";
+import { Download, Eye, Link2, Pencil, Share2, Trash2 } from "lucide-react";
 import { Badge } from "@/components/badge";
 import { Button } from "@/components/button";
 import { Card } from "@/components/card";
@@ -65,9 +65,28 @@ function ArtifactRow({ artifact }: { artifact: ArtifactSummary }) {
         <Button variant="ghost" size="sm" onClick={() => setOpenDialog("preview")}>
           <Eye className="h-3.5 w-3.5" /> Preview
         </Button>
-        <Button variant="ghost" size="sm" onClick={() => setOpenDialog("share")}>
-          <Share2 className="h-3.5 w-3.5" /> Share…
-        </Button>
+        {artifact.liveShareUrl ? (
+          <>
+            <a
+              href={artifact.liveShareUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex h-8 max-w-[15rem] items-center gap-1.5 truncate rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2.5 font-mono text-xs text-[var(--text)] transition hover:border-[var(--accent)]"
+              title={artifact.liveShareUrl}
+            >
+              <Link2 className="h-3.5 w-3.5 shrink-0 text-[var(--accent)]" />
+              <span className="truncate">{artifact.liveShareUrl.replace(/^https?:\/\//, "")}</span>
+            </a>
+            <CopyButton value={artifact.liveShareUrl} label="Copy link" />
+            <Button variant="ghost" size="sm" onClick={() => setOpenDialog("share")}>
+              <Share2 className="h-3.5 w-3.5" /> New link
+            </Button>
+          </>
+        ) : (
+          <Button variant="ghost" size="sm" onClick={() => setOpenDialog("share")}>
+            <Share2 className="h-3.5 w-3.5" /> Share…
+          </Button>
+        )}
         <Button variant="ghost" size="sm" onClick={() => setOpenDialog("edit")}>
           <Pencil className="h-3.5 w-3.5" /> Edit
         </Button>

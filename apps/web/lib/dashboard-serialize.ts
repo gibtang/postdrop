@@ -2,6 +2,8 @@ import type { ArtifactDoc } from "./models";
 
 export interface ArtifactSummary {
   artifactId: string;
+  /** Newest live share URL, attached by the dashboard list query; absent elsewhere. */
+  liveShareUrl?: string | null;
   filename: string;
   contentType: string;
   size: number;
