@@ -1,3 +1,14 @@
+import { createReporter } from "@simple-alerts/nextjs";
+
+// Simple Alerts server-error reporter: no-op unless ALERTS_* env vars set.
+const alertsOnRequestError =
+  process.env.ALERTS_ENDPOINT && process.env.ALERTS_PROJECT_KEY
+    ? createReporter({
+        endpoint: process.env.ALERTS_ENDPOINT,
+        projectKey: process.env.ALERTS_PROJECT_KEY,
+      }).onRequestError
+    : async () => {};
+
 // Next.js instrumentation hook (App Router): wires the Sentry server/edge
 // SDKs, captures every unhandled server error via onRequestError, and pages
 // via Telegram for 5xx-class failures.
@@ -13,18 +24,26 @@ export async function register() {
 export async function onRequestError(
   ...args: Parameters<typeof import("@sentry/nextjs").captureRequestError>
 ) {
-  const { captureRequestError } = await import("@sentry/nextjs");
-  captureRequestError(...args);
-
-  const { notifyErrorAfter } = await import("./lib/error-notify");
   const [error, request] = args;
-  notifyErrorAfter({
-    error,
-    source: "server/request",
-    status: 500,
-    details: {
-      path: "path" in request ? String(request.path) : undefined,
-      method: "method" in request ? String(request.method) : undefined,
-    },
-  });
+
+  await Promise.allSettled([
+    (async () => {
+      const { captureRequestError } = await import("@sentry/nextjs");
+      captureRequestError(...args);
+
+      const { notifyErrorAfter } = await import("./lib/error-notify");
+      notifyErrorAfter({
+        error,
+        source: "server/request",
+        status: 500,
+        details: {
+          path: "path" in request ? String(request.path) : undefined,
+          method: "method" in request ? String(request.method) : undefined,
+        },
+      });
+    })(),
+    (async () => {
+      await alertsOnRequestError(...args);
+    })(),
+  ]);
 }
