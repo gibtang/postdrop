@@ -1,0 +1,29 @@
+{
+  "$schema": "../../node_modules/.pnpm/node_modules/wrangler/config-schema.json",
+  "name": "postdrop",
+  "main": "./worker-entry.ts",
+  "compatibility_date": "2025-05-05",
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+  "images": {
+    "binding": "IMAGES"
+  },
+  "services": [
+    {
+      "binding": "WORKER_SELF_REFERENCE",
+      "service": "postdrop"
+    }
+  ],
+  "triggers": {
+    "crons": ["*/5 * * * *"]
+  },
+  "vars": {
+    "STORAGE_DRIVER": "s3",
+    "S3_REGION": "auto",
+    "S3_BUCKET": "postdrop-artifacts",
+    "S3_ENDPOINT": "https://0af4eab452c61ba50b9b84753bf2a5aa.r2.cloudflarestorage.com"
+  }
+}

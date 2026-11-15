@@ -71,8 +71,7 @@ export async function linkGoogleAction(): Promise<void> {
   const user = await requireUser();
   if (!user) redirect("/login?link_google=1");
 
-  const mongoose = await connectDb();
-  const existing = await mongoose.connection.db!.collection("accounts").findOne(
+  const existing = await (await connectDb()).db(process.env.MONGODB_DATABASE_NAME || "postdrop").collection("accounts").findOne(
     { userId: user._id, provider: "google" },
     { projection: { _id: 1 } },
   );
