@@ -1,8 +1,23 @@
 # Postdrop operations
 
-Primary deploy: **Vercel** (per global deploy policy; ADR 0006 revised). Backing services: MongoDB Atlas + Backblaze B2. The VPS below remains the documented **self-host path** (labeled container on the Coolify network).
+Primary deploy: **Cloudflare Workers** (OpenNext; ADR 0013 — supersedes ADR 0006/VPS and the 2026-10-31 Vercel note). Backing services: MongoDB Atlas + Backblaze B2. The VPS below is the **retired self-host path** — containers still run but receive no traffic.
 
-## VPS layout (ubuntu@66.70.190.82) — self-host path
+## Deploy — Cloudflare Workers (primary)
+
+```bash
+pnpm install                                   # repo root
+cd apps/web
+npx opennextjs-cloudflare build
+CLOUDFLARE_API_TOKEN=<cf token> \
+CLOUDFLARE_ACCOUNT_ID=0af4eab452c61ba50b9b84753bf2a5aa \
+  npx wrangler deploy
+```
+
+- Config lives in `apps/web/wrangler.jsonc` (name `postdrop`, cron `*/5 * * * *`, B2 S3 vars). Secrets via `npx wrangler secret put <NAME>`: `MONGODB_URI`, `MONGODB_DATABASE_NAME`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `BASE_URL=https://thepostdrop.dev`, `AUTH_URL=https://thepostdrop.dev`, `AUTH_TRUST_HOST=true`, `AUTH_SECRET` (carried from the VPS `secrets.env`; Auth.js v5 requires it), `ALERTS_ENDPOINT`, `ALERTS_PROJECT_KEY` (pending). SES values optional — unset auto-verifies signups.
+- `thepostdrop.dev` is worker-routed in the Cloudflare zone (apex + www). `https://postdrop.gibtang.workers.dev` is the preview fallback.
+- Verify after deploy: homepage 200 with `x-opennext: 1`; paste round trip (create → read → 410 burn) against `/api/pastes`; `/sitemap.xml` emits `https://thepostdrop.dev` (proves `BASE_URL`); `/api/auth/csrf` 200.
+
+## VPS layout (ubuntu@66.70.190.82) — retired self-host path
 
 Use `ssh -F ~/Dropbox/ssh/config vps` (plain `ubuntu@66.70.190.82` stopped resolving keys mid-session).
 
@@ -38,7 +53,7 @@ REST (same token): `https://thepostdrop.dev/v1/*`.
 
 - **Dashboard login**: Auth.js v5 — Google OAuth + email/password (scrypt, email-verified before first credentials login; signup auto-verifies when SES is unconfigured). Firebase is gone (ADR 0010 supersedes 0007).
 - Email (verification/reset) via Amazon SES (thepostdrop.dev identity, eu-north-1); unset degrades gracefully with auto-verify.
-- Deploy is a Coolify-network container on the VPS path, not a Coolify-managed resource — ADR 0006.
+- Deploy is a Coolify-network container on the VPS path — **retired 2026-11-15** (ADR 0013); containers remain up but unrouted, Atlas replaced the VPS Mongo. Decommission is pending.
 - Limits: **5 MB per artifact** (`413 FILE_TOO_LARGE`), **500 MB per account** (`422 QUOTA_EXCEEDED`); 60 uploads/min per token (`429`). Format whitelist enforced server-side (`422 UNSUPPORTED_FORMAT`). No billing.
 - No webhooks (removed with the pivot) — agents poll via MCP or REST.
 - Manual sweeper tick (session auth): `POST /api/sweeper/run` → `{expiredLinks, pastesPurged}`.
