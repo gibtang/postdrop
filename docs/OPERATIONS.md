@@ -7,13 +7,13 @@ Primary deploy: **Cloudflare Workers** (OpenNext; ADR 0013 — supersedes ADR 00
 ```bash
 pnpm install                                   # repo root
 cd apps/web
-npx opennextjs-cloudflare build
+npx opennextjs-cloudflare build   # GA_MEASUREMENT_ID must be in env — see secrets note below
 CLOUDFLARE_API_TOKEN=<cf token> \
 CLOUDFLARE_ACCOUNT_ID=0af4eab452c61ba50b9b84753bf2a5aa \
   npx wrangler deploy
 ```
 
-- Config lives in `apps/web/wrangler.jsonc` (name `postdrop`, cron `*/5 * * * *`, B2 S3 vars). Secrets via `npx wrangler secret put <NAME>`: `MONGODB_URI`, `MONGODB_DATABASE_NAME`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `BASE_URL=https://thepostdrop.dev`, `AUTH_URL=https://thepostdrop.dev`, `AUTH_TRUST_HOST=true`, `AUTH_SECRET` (carried from the VPS `secrets.env`; Auth.js v5 requires it), `ALERTS_ENDPOINT`, `ALERTS_PROJECT_KEY` (pending). SES values optional — unset auto-verifies signups.
+- Config lives in `apps/web/wrangler.jsonc` (name `postdrop`, cron `*/5 * * * *`, B2 S3 vars). Secrets via `npx wrangler secret put <NAME>`: `MONGODB_URI`, `MONGODB_DATABASE_NAME`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `BASE_URL=https://thepostdrop.dev`, `AUTH_URL=https://thepostdrop.dev`, `AUTH_TRUST_HOST=true`, `AUTH_SECRET` (carried from the VPS `secrets.env`; Auth.js v5 requires it), `GA_MEASUREMENT_ID=G-M0YZL8SPXX` (must exist **at build time** too — the homepage is prerendered, so pass it to `opennextjs-cloudflare build` or the gtag snippet won't render; see issue #13), `ALERTS_ENDPOINT`, `ALERTS_PROJECT_KEY` (pending). SES values optional — unset auto-verifies signups.
 - `thepostdrop.dev` is worker-routed in the Cloudflare zone (apex + www). `https://postdrop.gibtang.workers.dev` is the preview fallback.
 - Verify after deploy: homepage 200 with `x-opennext: 1`; paste round trip (create → read → 410 burn) against `/api/pastes`; `/sitemap.xml` emits `https://thepostdrop.dev` (proves `BASE_URL`); `/api/auth/csrf` 200.
 
