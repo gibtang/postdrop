@@ -13,13 +13,9 @@ const credentialsSchema = z.object({
   password: z.string().min(8),
 });
 
-type AdapterClientPromise = Parameters<typeof MongoDBAdapter>[0];
-
 export const { handlers, auth, signIn, signOut } = NextAuth({
   ...authConfig,
-  adapter: MongoDBAdapter(
-    connectDb().then((mongoose) => mongoose.connection.getClient()) as unknown as AdapterClientPromise,
-  ),
+  adapter: MongoDBAdapter(connectDb()),
   providers: [
     Google({
       clientId: process.env.GOOGLE_CLIENT_ID,

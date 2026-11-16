@@ -1,5 +1,5 @@
-import { connectDb } from "@/lib/db";
 import { requireUser } from "@/lib/auth-user";
+import { getDb } from "@/lib/db";
 import { linkGoogleAction } from "../../(auth)/actions";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/card";
 import { Button } from "@/components/button";
@@ -13,9 +13,8 @@ interface SettingsProps {
 export default async function SettingsPage({ searchParams }: SettingsProps) {
   const user = await requireUser();
   const params = await searchParams;
-  const db = await connectDb();
   const googleAccount = user
-    ? await db.connection.db!.collection("accounts").findOne(
+    ? await (await getDb()).collection("accounts").findOne(
         { userId: user._id, provider: "google" },
         { projection: { _id: 1 } },
       )

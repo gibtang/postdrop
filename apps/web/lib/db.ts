@@ -1,33 +1,24 @@
-import mongoose from "mongoose";
-import { startSweeper } from "./sweeper";
+import { MongoClient } from "mongodb";
 
-type MongooseCache = {
-  conn: typeof mongoose | null;
-  promise: Promise<typeof mongoose> | null;
-};
+/**
+ * Raw `mongodb` driver connection (replaces mongoose for Cloudflare Workers
+ * compatibility). One client per isolate, cached on globalThis like the old
+ * mongoose cache so hot reloads and repeated invocations reuse it.
+ */
+const globalRef = globalThis as unknown as { __postdropMongo?: MongoClient };
 
-const globalRef = globalThis as unknown as { __postdropMongoose?: MongooseCache };
+export async function connectDb(): Promise<MongoClient> {
+  if (globalRef.__postdropMongo) return globalRef.__postdropMongo;
+  const uri = process.env.MONGODB_URI;
+  if (!uri) throw new Error("MONGODB_URI is not configured");
+  const client = new MongoClient(uri, { serverSelectionTimeoutMS: 10_000 });
+  await client.connect();
+  globalRef.__postdropMongo = client;
+  return client;
+}
 
-const cached: MongooseCache = (globalRef.__postdropMongoose ??= {
-  conn: null,
-  promise: null,
-});
-
-export async function connectDb(): Promise<typeof mongoose> {
-  if (cached.conn) return cached.conn;
-  if (!cached.promise) {
-    const uri = process.env.MONGODB_URI;
-    if (!uri) throw new Error("MONGODB_URI is not configured");
-    // A rejected connect must not stay memoized: when DNS/network is down at
-    // boot, a poisoned promise would 500 every DB route until restart.
-    cached.promise = mongoose
-      .connect(uri, { serverSelectionTimeoutMS: 10_000 })
-      .catch((err: unknown) => {
-        cached.promise = null;
-        throw err;
-      });
-  }
-  cached.conn = await cached.promise;
-  startSweeper();
-  return cached.conn;
+/** Returns the app database, ensuring the client is connected first. */
+export async function getDb() {
+  const client = await connectDb();
+  return client.db(process.env.MONGODB_DATABASE_NAME || "postdrop");
 }

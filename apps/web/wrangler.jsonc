@@ -1,0 +1,29 @@
+{
+  "$schema": "../../node_modules/.pnpm/node_modules/wrangler/config-schema.json",
+  "name": "postdrop",
+  "main": "./worker-entry.ts",
+  "compatibility_date": "2025-05-05",
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+  "images": {
+    "binding": "IMAGES"
+  },
+  "services": [
+    {
+      "binding": "WORKER_SELF_REFERENCE",
+      "service": "postdrop"
+    }
+  ],
+  "triggers": {
+    "crons": ["*/5 * * * *"]
+  },
+  "vars": {
+    "STORAGE_DRIVER": "s3",
+    "S3_REGION": "us-east-005",
+    "S3_BUCKET": "postdrop-files-e0a33531d28c",
+    "S3_ENDPOINT": "https://s3.us-east-005.backblazeb2.com"
+  }
+}
