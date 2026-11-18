@@ -59,6 +59,9 @@ importers:
       '@simple-alerts/nextjs':
         specifier: https://github.com/gibtang/simple-alerts/releases/download/sdk-v0.1.0/simple-alerts-nextjs-0.1.0.tgz
         version: https://github.com/gibtang/simple-alerts/releases/download/sdk-v0.1.0/simple-alerts-nextjs-0.1.0.tgz(next@15.5.27(@opentelemetry/api@1.9.1)(@types/node@20.19.43)(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(react@19.3.0)
+      aws4fetch:
+        specifier: ^1.0.20
+        version: 1.0.20
       class-variance-authority:
         specifier: ^0.7.0
         version: 0.7.1
