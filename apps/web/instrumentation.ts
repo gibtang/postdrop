@@ -15,6 +15,10 @@ const alertsOnRequestError =
 export async function register() {
   if (process.env.NEXT_RUNTIME === "nodejs") {
     await import("./sentry.server.config");
+    // In-process 5-min sweeper (VPS path). Workers runs it via cron instead;
+    // set SWEEPER_DISABLED=1 there.
+    const { startSweeper } = await import("./lib/sweeper");
+    startSweeper();
   }
   if (process.env.NEXT_RUNTIME === "edge") {
     await import("./sentry.edge.config");

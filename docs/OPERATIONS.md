@@ -1,6 +1,13 @@
 # Postdrop operations
 
-Primary deploy: **Vercel** (per global deploy policy; ADR 0006 revised). Backing services: MongoDB Atlas + Backblaze B2. The VPS below remains the documented **self-host path** (labeled container on the Coolify network).
+Primary deploy (since 2026-11-18): **VPS self-host path below** — Cloudflare Workers cutover (2026-11-16) reverted after Free-plan 10ms CPU limits broke dashboard renders and actions. Backing services: MongoDB Atlas (same cluster Workers used) + Backblaze B2. Worker `postdrop` still exists as instant rollback: re-add zone routes `thepostdrop.dev/*` + `www.thepostdrop.dev/*` (worker vars include `SWEEPER_DISABLED=1`).
+
+## B2 / storage notes (2026-11-18)
+
+- Storage driver = `aws4fetch` (fetch-based SigV4). The AWS SDK v3 data plane cannot run on Workers (needs `node:fs` + node streams) and presigned HEAD is unsupported by B2 — kept for both runtimes.
+- `head()` = Range-GET (`bytes=0-0`); `readStoredHead()` = bounded Range-GET. Never `reader.cancel()` / `res.body.cancel()` an unconsumed undici body — it deadlocks Node's fetch.
+- B2 key layout in `credentials.md`: master key is S3-incompatible; bucket-scoped app key 403s HEAD/range from CF egress; `postdrop-s3-allbuckets` (…0004) is live in prod secrets.
+- Presigned PUT: expiry MUST be a query param (`X-Amz-Expires`), never a request header.
 
 ## VPS layout (ubuntu@66.70.190.82) — self-host path
 

@@ -221,8 +221,11 @@ export function toWebStream(bytes: Buffer): ReadableStream {
 
 /** First bytes of a stored object, up to `max` — for magic-byte checks. */
 export async function readStoredHead(key: string, max: number): Promise<Buffer> {
-  const stream = await getStorage().getStream(key);
-  const reader = stream.getReader();
+  // Bounded range request instead of stream+cancel: cancelling an
+  // unconsumed undici body deadlocks the fetch under Node.
+  const range = await getStorage().getRange(key, 0, max - 1);
+  if (!range) return Buffer.alloc(0);
+  const reader = range.getReader();
   const chunks: Uint8Array[] = [];
   let total = 0;
   for (;;) {
@@ -230,10 +233,7 @@ export async function readStoredHead(key: string, max: number): Promise<Buffer> 
     if (done) break;
     chunks.push(value);
     total += value.byteLength;
-    if (total >= max) {
-      await reader.cancel().catch(() => {});
-      break;
-    }
+    if (total >= max) break;
   }
   return Buffer.concat(chunks.map((c) => Buffer.from(c)));
 }

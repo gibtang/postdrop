@@ -19,6 +19,7 @@
     "@radix-ui/react-slot": "^1.1.0",
     "@sentry/nextjs": "^11.10.0",
     "@simple-alerts/nextjs": "https://github.com/gibtang/simple-alerts/releases/download/sdk-v0.1.0/simple-alerts-nextjs-0.1.0.tgz",
+    "aws4fetch": "^1.0.20",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.0",
     "lucide-react": "^0.469.0",

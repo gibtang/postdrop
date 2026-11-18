@@ -1,6 +1,5 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
 import { signOut } from "@/auth";
 import { Artifact, ShareLink, Token } from "./models";
 import type { ArtifactDoc } from "./models";
@@ -33,12 +32,6 @@ function fail(error: string): ActionError {
   return { ok: false, error };
 }
 
-function revalidateDashboard(): void {
-  revalidatePath("/dashboard");
-  revalidatePath("/dashboard/tokens");
-  revalidatePath("/dashboard/links");
-}
-
 // ---------------------------------------------------------------------------
 // Artifacts
 // ---------------------------------------------------------------------------
@@ -61,7 +54,6 @@ export async function uploadArtifactAction(
     storedFilename: typeof nameField === "string" && nameField !== "" ? nameField : undefined,
   });
   if (!result.ok) return fail(resultMessage(result.res.status));
-  revalidateDashboard();
   return { ok: true, artifact: serializeForDashboard(result.artifact) };
 }
 
@@ -154,7 +146,6 @@ export async function completeUploadAction(input: {
     userId: String(user._id),
     data: { artifactId: match[1], filename, size: head.size, via: "dashboard" },
   });
-  revalidateDashboard();
   return { ok: true, artifact: serializeForDashboard(artifact) };
 }
 
@@ -202,7 +193,6 @@ export async function editArtifactAction(
     userId: String(user._id),
     data: { artifactId, filename, size: bytes.byteLength, via: "dashboard" },
   });
-  revalidateDashboard();
   return { ok: true, artifact: serializeForDashboard(artifact) };
 }
 
@@ -251,7 +241,6 @@ export async function completeEditAction(input: {
     userId: String(user._id),
     data: { artifactId, filename, size: head.size, via: "dashboard-presign" },
   });
-  revalidateDashboard();
   return { ok: true, artifact: serializeForDashboard(artifact) };
 }
 
@@ -268,7 +257,6 @@ export async function deleteArtifactAction(
   await ShareLink.deleteMany({ artifactId });
   await artifact.deleteOne();
   recordEvent({ type: "artifact_deleted", userId: String(user._id), data: { artifactId } });
-  revalidateDashboard();
   return { ok: true, deleted: true };
 }
 
@@ -305,7 +293,6 @@ export async function createShareLinkAction(input: {
     expiresAt,
   });
   recordEvent({ type: "share_created", userId: String(user._id), data: { linkId: link.linkId, artifactId } });
-  revalidateDashboard();
   return { ok: true, link: serializeShareLink(link) };
 }
 
@@ -323,7 +310,6 @@ export async function revokeShareLinkAction(
     await link.save();
     recordEvent({ type: "share_revoked", userId: String(user._id), data: { linkId } });
   }
-  revalidateDashboard();
   return { ok: true, revoked: true };
 }
 
@@ -356,7 +342,6 @@ export async function createTokenAction(
     keyPrefix: tokenPrefix,
   });
   recordEvent({ type: "token_created", userId: String(user._id), data: { tokenId: doc.tokenId } });
-  revalidatePath("/dashboard/tokens");
   return {
     ok: true,
     created: {
@@ -382,7 +367,6 @@ export async function revokeTokenAction(
     doc.revokedAt = new Date();
     await doc.save();
   }
-  revalidatePath("/dashboard/tokens");
   return { ok: true, revoked: true };
 }
 

@@ -22,6 +22,7 @@
   },
   "vars": {
     "STORAGE_DRIVER": "s3",
+    "SWEEPER_DISABLED": "1",
     "S3_REGION": "us-east-005",
     "S3_BUCKET": "postdrop-files-e0a33531d28c",
     "S3_ENDPOINT": "https://s3.us-east-005.backblazeb2.com"

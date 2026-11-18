@@ -65,9 +65,12 @@ export function UploadForm({
           return;
         }
         setBusy(replacing ? "Replacing…" : "Uploading…");
+        // ArrayBuffer (not File): Chromium can abort fetch uploads that carry
+        // a File body over B2's Expect: 100-continue flow (net::ERR_ABORTED
+        // despite HTTP 200), surfacing as the generic upload toast.
         const put = await fetch(presign.uploadUrl, {
           method: "PUT",
-          body: file,
+          body: await file.arrayBuffer(),
           headers: { "Content-Type": presign.contentType },
         });
         if (!put.ok) {

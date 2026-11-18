@@ -1,4 +1,4 @@
-import { SESv2Client, SendEmailCommand } from "@aws-sdk/client-sesv2";
+import { AwsClient } from "aws4fetch";
 
 /**
  * Transactional email via Amazon SES (domain identity thepostdrop.dev,
@@ -13,15 +13,20 @@ function mailFrom(): string {
   return process.env.MAIL_FROM ?? "no-reply@thepostdrop.dev";
 }
 
-let cachedClient: SESv2Client | null = null;
+let cachedClient: AwsClient | null = null;
 
-function sesClient(): SESv2Client {
-  cachedClient ??= new SESv2Client({
+/**
+ * aws4fetch (fetch-based SigV4) instead of @aws-sdk/client-sesv2: the AWS SDK
+ * needs node:fs (shared INI config) during config resolution, which does not
+ * exist on Cloudflare Workers (`[unenv] fs.readFile is not implemented yet!`).
+ * Uses the SES v2 JSON protocol (X-Amz-Target) over plain fetch.
+ */
+function sesClient(): AwsClient {
+  cachedClient ??= new AwsClient({
+    accessKeyId: process.env.SES_ACCESS_KEY_ID ?? "",
+    secretAccessKey: process.env.SES_SECRET_ACCESS_KEY ?? "",
     region: process.env.SES_REGION ?? "eu-north-1",
-    credentials: {
-      accessKeyId: process.env.SES_ACCESS_KEY_ID ?? "",
-      secretAccessKey: process.env.SES_SECRET_ACCESS_KEY ?? "",
-    },
+    service: "ses",
   });
   return cachedClient;
 }
@@ -42,26 +47,37 @@ async function sendEmail(params: {
     return false;
   }
   try {
-    await sesClient().send(
-      new SendEmailCommand({
-        FromEmailAddress: `Postdrop <${mailFrom()}>`,
-        Destination: { ToAddresses: [params.to] },
-        ConfigurationSetName: SES_CONFIGURATION_SET,
-        EmailTags: [
-          { Name: "app", Value: "postdrop" },
-          { Name: "type", Value: params.subject.toLowerCase().includes("reset") ? "password_reset" : "email_verification" },
-        ],
-        Content: {
-          Simple: {
-            Subject: { Data: params.subject, Charset: "UTF-8" },
-            Body: {
-              Html: { Data: params.html, Charset: "UTF-8" },
-              Text: { Data: params.text, Charset: "UTF-8" },
-            },
+    const payload = {
+      FromEmailAddress: `Postdrop <${mailFrom()}>`,
+      Destination: { ToAddresses: [params.to] },
+      ConfigurationSetName: SES_CONFIGURATION_SET,
+      EmailTags: [
+        { Name: "app", Value: "postdrop" },
+        { Name: "type", Value: params.subject.toLowerCase().includes("reset") ? "password_reset" : "email_verification" },
+      ],
+      Content: {
+        Simple: {
+          Subject: { Data: params.subject, Charset: "UTF-8" },
+          Body: {
+            Html: { Data: params.html, Charset: "UTF-8" },
+            Text: { Data: params.text, Charset: "UTF-8" },
           },
         },
-      }),
-    );
+      },
+    };
+    const region = process.env.SES_REGION ?? "eu-north-1";
+    const res = await sesClient().fetch(`https://email.${region}.amazonaws.com/`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/x-amz-json-1.0",
+        "x-amz-target": "Sesv2.SendEmail",
+      },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const detail = await res.text().catch(() => "");
+      throw new Error(`HTTP ${res.status}${detail ? `: ${detail.slice(0, 300)}` : ""}`);
+    }
     return true;
   } catch (err) {
     console.error(`email: SES send to ${params.to} failed:`, err instanceof Error ? err.message : err);
