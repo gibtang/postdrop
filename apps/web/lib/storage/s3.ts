@@ -1,31 +1,23 @@
-import {
-  DeleteObjectCommand,
-  GetObjectCommand,
-  HeadObjectCommand,
-  NotFound,
-  PutObjectCommand,
-  S3Client,
-} from "@aws-sdk/client-s3";
-import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
-import { Readable } from "node:stream";
-import type { ReadableStream as NodeWebReadableStream } from "node:stream/web";
+import { AwsClient } from "aws4fetch";
 
-let client: S3Client | null = null;
+// aws4fetch (fetch-based SigV4) instead of @aws-sdk/client-s3: the AWS SDK's
+// data plane needs node:fs (shared INI config) and node stream chunked
+// encoding during config resolution/streaming, neither of which exists on
+// Cloudflare Workers (`[unenv] fs.readFile is not implemented yet!`).
 
-function s3(): S3Client {
+let client: AwsClient | null = null;
+
+function s3(): AwsClient {
   if (client) return client;
-  const { S3_ENDPOINT, S3_REGION, S3_BUCKET, S3_ACCESS_KEY_ID, S3_SECRET_ACCESS_KEY } = process.env;
-  if (!S3_BUCKET || !S3_REGION || !S3_ACCESS_KEY_ID || !S3_SECRET_ACCESS_KEY) {
+  const { S3_REGION, S3_ACCESS_KEY_ID, S3_SECRET_ACCESS_KEY } = process.env;
+  if (!S3_REGION || !S3_ACCESS_KEY_ID || !S3_SECRET_ACCESS_KEY) {
     throw new Error("S3 storage driver is not fully configured");
   }
-  client = new S3Client({
+  client = new AwsClient({
+    accessKeyId: S3_ACCESS_KEY_ID,
+    secretAccessKey: S3_SECRET_ACCESS_KEY,
     region: S3_REGION,
-    endpoint: S3_ENDPOINT || undefined,
-    forcePathStyle: true,
-    credentials: {
-      accessKeyId: S3_ACCESS_KEY_ID,
-      secretAccessKey: S3_SECRET_ACCESS_KEY,
-    },
+    service: "s3",
   });
   return client;
 }
@@ -36,71 +28,122 @@ const bucket = () => {
   return b;
 };
 
+/** Path-style URL for an object; each key segment URI-encoded. */
+function objectUrl(key: string): string {
+  const endpoint =
+    process.env.S3_ENDPOINT || `https://s3.${process.env.S3_REGION}.amazonaws.com`;
+  const encoded = key
+    .split("/")
+    .map((segment) => encodeURIComponent(segment))
+    .join("/");
+  return `${endpoint.replace(/\/+$/, "")}/${bucket()}/${encoded}`;
+}
+
+async function readAll(body: ReadableStream): Promise<Uint8Array> {
+  const reader = body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    chunks.push(value);
+    total += value.byteLength;
+  }
+  const out = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    out.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return out;
+}
+
 export const s3Storage = {
   async putStream(
     key: string,
     body: ReadableStream,
     opts: { contentType?: string; contentLength?: number },
   ): Promise<void> {
-    await s3().send(
-      new PutObjectCommand({
-        Bucket: bucket(),
-        Key: key,
-        Body: Readable.fromWeb(body as NodeWebReadableStream),
-        ContentType: opts.contentType,
-        ContentLength: opts.contentLength,
-      }),
-    );
-  },
-
-  async getStream(key: string): Promise<ReadableStream> {
-    const res = await s3().send(new GetObjectCommand({ Bucket: bucket(), Key: key }));
-    if (!res.Body) throw new Error(`S3 object ${key} has no body`);
-    return Readable.toWeb(res.Body as Readable) as ReadableStream;
-  },
-
-  async getRange(key: string, start: number, end: number): Promise<ReadableStream | null> {
-    const res = await s3().send(
-      new GetObjectCommand({ Bucket: bucket(), Key: key, Range: `bytes=${start}-${end}` }),
-    );
-    if (!res.Body) return null;
-    return Readable.toWeb(res.Body as Readable) as ReadableStream;
-  },
-
-  async remove(key: string): Promise<void> {
-    await s3().send(new DeleteObjectCommand({ Bucket: bucket(), Key: key }));
-  },
-
-  async head(key: string): Promise<{ size: number; contentType: string } | null> {
-    try {
-      const res = await s3().send(new HeadObjectCommand({ Bucket: bucket(), Key: key }));
-      return {
-        size: res.ContentLength ?? 0,
-        contentType: res.ContentType ?? "application/octet-stream",
-      };
-    } catch (err: unknown) {
-      if (err instanceof NotFound) return null;
-      // Some S3 implementations signal a missing object with 404/412 metadata
-      // on HeadObject instead of the typed NotFound error.
-      if (err instanceof Error) {
-        // AWS SDK service errors carry $metadata on a shape tsc cannot see.
-        const service = err as Error & { $metadata?: { httpStatusCode?: number } };
-        const status = service.$metadata?.httpStatusCode;
-        if (status === 404 || status === 412) return null;
-      }
-      throw err;
+    const bytes = await readAll(body);
+    if (opts.contentLength !== undefined && bytes.byteLength !== opts.contentLength) {
+      throw new Error(
+        `s3 put size mismatch: expected ${opts.contentLength}, got ${bytes.byteLength}`,
+      );
+    }
+    const res = await s3().fetch(objectUrl(key), {
+      method: "PUT",
+      headers: {
+        "content-type": opts.contentType ?? "application/octet-stream",
+        "content-length": String(bytes.byteLength),
+        "x-amz-content-sha256": "UNSIGNED-PAYLOAD",
+      },
+      body: bytes as unknown as BodyInit,
+    });
+    if (!res.ok) {
+      const detail = await res.text().catch(() => "");
+      throw new Error(`s3 put failed (HTTP ${res.status})${detail ? `: ${detail.slice(0, 300)}` : ""}`);
     }
   },
 
+  async getStream(key: string): Promise<ReadableStream> {
+    const res = await s3().fetch(objectUrl(key), { method: "GET" });
+    if (!res.ok) throw new Error(`s3 get failed (HTTP ${res.status})`);
+    if (!res.body) throw new Error(`s3 object ${key} has no body`);
+    return res.body;
+  },
+
+  async getRange(key: string, start: number, end: number): Promise<ReadableStream | null> {
+    const res = await s3().fetch(objectUrl(key), {
+      method: "GET",
+      headers: { range: `bytes=${start}-${end}` },
+    });
+    if (res.status === 404 || res.status === 416) return null;
+    if (!res.ok) throw new Error(`s3 range get failed (HTTP ${res.status})`);
+    if (!res.body) throw new Error(`s3 object ${key} has no body`);
+    return res.body;
+  },
+
+  async remove(key: string): Promise<void> {
+    const res = await s3().fetch(objectUrl(key), { method: "DELETE" });
+    // 404 is fine: deleting an absent object is a no-op for our purposes.
+    if (!res.ok && res.status !== 404) {
+      throw new Error(`s3 delete failed (HTTP ${res.status})`);
+    }
+  },
+
+  async head(key: string): Promise<{ size: number; contentType: string } | null> {
+    // Range-GET instead of HEAD: B2's S3 endpoint 403s signed HEAD requests
+    // for some application keys while PUT/GET with the same key succeed.
+    // `bytes=0-0` costs one small request and `Content-Range` carries size.
+    const res = await s3().fetch(objectUrl(key), {
+      method: "GET",
+      headers: { range: "bytes=0-0" },
+    });
+    if (res.status === 404) return null;
+    if (!res.ok) {
+      const detail = await res.text().catch(() => "");
+      throw new Error(`s3 head failed (HTTP ${res.status})${detail ? `: ${detail.slice(0, 200)}` : ""}`);
+    }
+    // Consume (not cancel) the body: cancelling an unconsumed undici stream
+    // deadlocks the fetch under Node, hanging the caller.
+    await res.arrayBuffer();
+    const total = res.headers.get("content-range")?.split("/")[1];
+    return {
+      size: Number(total ?? res.headers.get("content-length") ?? 0),
+      contentType: res.headers.get("content-type") ?? "application/octet-stream",
+    };
+  },
+
   async presignPut(key: string, contentType: string): Promise<{ url: string }> {
-    // The presigner and client-s3 resolve independent @smithy/core copies
-    // (class identity differs), so bridge the nominal type here.
-    const client = s3() as unknown as Parameters<typeof getSignedUrl>[0];
-    const url = await getSignedUrl(
-      client,
-      new PutObjectCommand({ Bucket: bucket(), Key: key, ContentType: contentType }),
-      { expiresIn: 15 * 60 },
-    );
-    return { url };
+    // Query-signed PUT URL; 15 minutes. Expiry must be a URL parameter (not a
+    // request header): aws4fetch signs leftover headers as-is, and B2 rejects
+    // a presigned request whose signed `x-amz-expires` header is absent.
+    // `content-type` is auto-excluded from signing by aws4fetch, so the
+    // browser just has to send the same value for B2 to store it.
+    const url = new URL(objectUrl(key));
+    url.searchParams.set("X-Amz-Expires", "900");
+    const request = new Request(url, { method: "PUT", headers: { "content-type": contentType } });
+    const signed = await s3().sign(request, { aws: { signQuery: true } });
+    return { url: signed.url };
   },
 };

@@ -38,4 +38,4 @@ Frozen integration contract for the artifact-sharing service (post-pivot, 2026-1
 
 ## Deploy
 
-Cloudflare Workers (OpenNext, worker `postdrop`) — commands + secret list in `docs/OPERATIONS.md` + ADR 0013. `BASE_URL`, `AUTH_SECRET`, `AUTH_URL`, `AUTH_TRUST_HOST` are worker secrets. Background sweeper = Worker cron trigger (5 min) marks expired share links and purges secret pastes.
+VPS self-host (Coolify-network container via `run-web.sh`, rsync from the repo root) — commands + env in `docs/OPERATIONS.md`. `MONGODB_URI` = Atlas. Background sweeper = in-process 5-min interval (Node), disabled on Workers via `SWEEPER_DISABLED=1`. Rollback = Cloudflare worker `postdrop` (ADR 0013, reverted 2026-11-18 — re-add zone routes to re-serve; worker cron covers the sweeper there).
