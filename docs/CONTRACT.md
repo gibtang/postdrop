@@ -34,8 +34,8 @@ Frozen integration contract for the artifact-sharing service (post-pivot, 2026-1
 
 ## Env contract (`apps/web/.env.example`)
 
-`MONGODB_URI`, `BASE_URL`, `AUTH_SECRET`, `AUTH_TRUST_HOST`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `SES_ACCESS_KEY_ID`/`SES_SECRET_ACCESS_KEY`/`SES_REGION`/`MAIL_FROM` (optional — unset auto-verifies signups), `STORAGE_DRIVER` + `DISK_STORAGE_PATH` or `S3_*`, `MAX_ARTIFACT_BYTES`, `QUOTA_BYTES`, `SWEEPER_DISABLED`. Clients: `POSTDROP_TOKEN`, `POSTDROP_BASE_URL`. Nothing else is read.
+`MONGODB_URI`, `BASE_URL`, `AUTH_SECRET`, `AUTH_URL`, `AUTH_TRUST_HOST`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `SES_ACCESS_KEY_ID`/`SES_SECRET_ACCESS_KEY`/`SES_REGION`/`MAIL_FROM` (optional — unset auto-verifies signups), `STORAGE_DRIVER` + `DISK_STORAGE_PATH` or `S3_*`, `ALERTS_ENDPOINT`/`ALERTS_PROJECT_KEY`/`TELEGRAM_ALERTS` (optional — unset is a no-op), `MAX_ARTIFACT_BYTES`, `QUOTA_BYTES`, `SWEEPER_DISABLED`. Clients: `POSTDROP_TOKEN`, `POSTDROP_BASE_URL`. Nothing else is read.
 
 ## Deploy
 
-Vercel primary (Atlas + B2); VPS labeled-container path documented in `docs/OPERATIONS.md` + ADR 0006. Background sweeper (5 min) marks expired share links and purges secret pastes.
+VPS self-host (Coolify-network container via `run-web.sh`, rsync from the repo root) — commands + env in `docs/OPERATIONS.md`. `MONGODB_URI` = Atlas. Background sweeper = in-process 5-min interval (Node), disabled on Workers via `SWEEPER_DISABLED=1`. Rollback = Cloudflare worker `postdrop` (ADR 0013, reverted 2026-11-18 — re-add zone routes to re-serve; worker cron covers the sweeper there).

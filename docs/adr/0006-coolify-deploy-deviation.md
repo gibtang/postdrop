@@ -1,5 +1,7 @@
 # Coolify-managed deployment replaced by labeled container on the Coolify network
 
+> Superseded 2026-11-15: the primary deploy target is now **Cloudflare Workers** — see ADR 0013. The 2026-10-31 Vercel note and the VPS labeled-container path below are historical; the VPS containers remain up but unrouted.
+
 > Update 2026-10-31: after the artifact-sharing pivot (ADR 0009) the primary deploy target for this workspace is **Vercel** (per global deploy policy); MongoDB Atlas + Backblaze B2 are the primary backing services. This ADR remains accurate as the **self-host path**: the labeled-container VPS setup below is the documented way to run Postdrop outside Vercel.
 
 This Coolify version's deployment pipeline fails for `dockerfile`-type applications: the build succeeds (in a helper container, pulling `FROM localhost:5000/postdrop-web:local` from a host-local registry), but the rolling update then looks for an image tag `pq2ez…:latest` that the build never produced, so every deploy fails. `dockerfile` is also immutable via the PATCH API.
